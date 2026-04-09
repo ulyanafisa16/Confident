@@ -5,9 +5,9 @@ from celery import Celery
 from celery.schedules import crontab
 
 # Ganti "config" dengan nama folder project Django kamu
-os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.settings")
+os.environ.setdefault("DJANGO_SETTINGS_MODULE", "confident.settings")
 
-app = Celery("confidential_sharing")
+app = Celery("confident")
 
 # Baca semua konfigurasi CELERY_* dari settings.py
 app.config_from_object("django.conf:settings", namespace="CELERY")

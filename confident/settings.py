@@ -36,6 +36,7 @@ ALLOWED_HOSTS = ['127.0.0.1', 'localhost', '192.168.21.63']
 
 INSTALLED_APPS = [
     'api',
+    'django_celery_beat',
     'corsheaders',
     'rest_framework',
     'django.contrib.admin',

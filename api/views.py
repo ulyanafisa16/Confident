@@ -8,6 +8,8 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated, AllowAny, BasePermission
 from rest_framework_simplejwt.views import TokenRefreshView as BaseTokenRefreshView
+from .aidetection import run_server_detection
+
 
 from .models import (
     User, Secret, SecretLink,
@@ -188,6 +190,7 @@ class SecretCreateView(APIView):
 
     @transaction.atomic
     def post(self, request):
+    
         serializer = SecretCreateSerializer(
             data=request.data,
             context={"request": request},
@@ -197,14 +200,85 @@ class SecretCreateView(APIView):
                 message="Gagal membuat secret.",
                 errors=serializer.errors,
             )
-
+    
+        vd = serializer.validated_data
+    
+        # ── Jalankan server-side detection SEBELUM simpan ke DB ──────────────
+        detection = run_server_detection(
+            secret_type           = vd.get("secret_type", ""),
+            mime_type             = vd.get("mime_type", ""),
+            original_filename     = vd.get("original_filename", ""),
+            file_size_bytes       = vd.get("file_size_bytes"),
+            encrypted_payload     = vd.get("encrypted_payload", ""),
+            encryption_iv         = vd.get("encryption_iv", ""),
+            ip_address            = get_client_ip(request),
+            user_agent            = request.META.get("HTTP_USER_AGENT", ""),
+            is_authenticated      = request.user.is_authenticated,
+            client_risk_score     = vd.get("client_risk_score", 0),
+            client_rules_triggered = vd.get("client_rules_triggered", []),
+            num_recipients        = vd.get("num_recipients", 1),
+            has_password          = bool(vd.get("access_password")),
+            has_email_whitelist   = bool(vd.get("email_whitelist")),
+            expires_in_hours      = vd.get("expires_in_hours"),
+            secret                = None,  # belum disimpan
+        )
+    
+        # ── BLOCKED → tolak total ─────────────────────────────────────────────
+        if detection.action == "blocked":
+            # Simpan log meski secret tidak disimpan
+            from .models import AIDetectionLog
+            AIDetectionLog.objects.create(
+                secret          = None,
+                source          = AIDetectionLog.DetectionSource.SERVER,
+                rules_triggered = detection.rules_triggered,
+                risk_score      = detection.total_score,
+                action_taken    = AIDetectionLog.ActionTaken.BLOCKED,
+                ip_address      = get_client_ip(request),
+                file_size_bytes = vd.get("file_size_bytes"),
+                secret_type     = vd.get("secret_type", ""),
+            )
+            return error_response(
+                message="Konten ini ditolak oleh sistem keamanan platform.",
+                errors={"detection": detection.rules_triggered},
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            )
+    
+        # ── Gabungkan score client + server ──────────────────────────────────
+        combined_score = min(
+            100,
+            vd.get("client_risk_score", 0) + detection.total_score
+        )
+        ai_flagged = combined_score >= 40
+    
+        # ── Simpan secret (serializer.save() sudah handle links + whitelist) ─
         secret, links = serializer.save()
-
+    
+        # Update score dengan hasil gabungan
+        secret.ai_risk_score = combined_score
+        secret.ai_flagged    = ai_flagged
+        secret.save(update_fields=["ai_risk_score", "ai_flagged"])
+    
+        # Update log server-side dengan relasi ke secret yang baru tersimpan
+        from .models import AIDetectionLog
+        AIDetectionLog.objects.filter(
+            secret__isnull=True,
+            ip_address=get_client_ip(request),
+        ).order_by("-created_at").first()
+        # (log sudah dibuat di dalam run_server_detection dengan secret=None,
+        #  update relasi secret di sini)
+        AIDetectionLog.objects.filter(
+            source=AIDetectionLog.DetectionSource.SERVER,
+            secret__isnull=True,
+            ip_address=get_client_ip(request),
+        ).order_by("-created_at").update(secret=secret)
+    
+        # ── Bangun response ───────────────────────────────────────────────────
         response_data = {
             "secret_id":    str(secret.id),
             "revoke_token": secret.revoke_token,
             "expires_at":   secret.expires_at,
             "ai_flagged":   secret.ai_flagged,
+            "ai_score":     secret.ai_risk_score,
             "created_at":   secret.created_at,
             "links": [
                 {
@@ -216,23 +290,23 @@ class SecretCreateView(APIView):
                 for link in links
             ],
         }
-
+    
         message = "Secret berhasil dibuat."
         if secret.ai_flagged:
             message += " Secret ini sedang dalam antrian review moderasi."
-
+    
         return success_response(
-            data=response_data,
-            message=message,
-            status_code=status.HTTP_201_CREATED,
+            data        = response_data,
+            message     = message,
+            status_code = status.HTTP_201_CREATED,
         )
 
 
 class MySecretsView(APIView):
     """
-    GET /api/secrets/my/
-    List semua secret milik user yang login.
-    Support filter by status dan pagination sederhana.
+        GET /api/secrets/my/
+        List semua secret milik user yang login.
+        Support filter by status dan pagination sederhana.
     """
     permission_classes = [IsAuthenticated]
 
@@ -242,23 +316,22 @@ class MySecretsView(APIView):
         per_page = min(int(request.query_params.get("per_page", 20)), 100)
 
         qs = Secret.objects.filter(
-            creator_user=request.user
+                creator_user=request.user
         ).prefetch_related("links", "email_whitelist").order_by("-created_at")
 
         if status_filter and status_filter in dict(Secret.Status.choices):
-            qs = qs.filter(status=status_filter)
+                qs = qs.filter(status=status_filter)
 
         total   = qs.count()
         offset  = (page - 1) * per_page
         secrets = qs[offset: offset + per_page]
 
         return success_response(data={
-            "total":    total,
-            "page":     page,
-            "per_page": per_page,
-            "secrets":  SecretDetailSerializer(secrets, many=True).data,
+                "total":    total,
+                "page":     page,
+                "per_page": per_page,
+                "secrets":  SecretDetailSerializer(secrets, many=True).data,
         })
-
 
 class SecretDetailView(APIView):
     """
@@ -866,3 +939,5 @@ class AdminAccessLogsView(APIView):
             "per_page": per_page,
             "logs":     AccessLogSerializer(logs, many=True).data,
         })
+    
+
