@@ -141,6 +141,7 @@ REST_FRAMEWORK = {
     "EXCEPTION_HANDLER": "api.exceptions.custom_exception_handler",
 }
  
+ 
 # ── JWT Settings ─────────────────────────────────────────────────────────────
 from datetime import timedelta
  

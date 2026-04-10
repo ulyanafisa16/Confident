@@ -149,8 +149,8 @@ class AnonymousSession(models.Model):
     def reset_if_new_day(self):
         """Reset counter jika sudah hari baru."""
         today = timezone.now().date()
-        if self.last_reset_date < today:
-            self.daily_count    = 0
+        if self.last_reset_date() < today:
+            self.daily_count = 0
             self.last_reset_date = today
             self.save(update_fields=["daily_count", "last_reset_date"])
 
