@@ -8,7 +8,7 @@ from django.contrib.auth.hashers import make_password, check_password
 
 from .models import (
     User, AnonymousSession, Secret, SecretLink,
-    EmailWhitelist, AccessLog, AIDetectionLog, RateLimitConfig,
+    EmailWhitelist, DomainWhitelist, AccessLog, AIDetectionLog, RateLimitConfig,
 )
 
 
@@ -320,6 +320,13 @@ class SecretCreateSerializer(serializers.Serializer):
         help_text="Daftar email yang boleh mengakses secret. Kosong = semua boleh."
     )
 
+    # --- Domain whitelist (opsional) ---
+    domain_whitelist = serializers.ListField(
+        child=serializers.CharField(max_length=255),
+        required=False, default=list,
+        help_text="Daftar domain yang boleh akses. Contoh: ['companyabc.com']"
+)
+
     # --- AI detection dari client (advisory) ---
     client_risk_score    = serializers.IntegerField(
         required=False, default=0, min_value=0, max_value=100,
@@ -378,6 +385,16 @@ class SecretCreateSerializer(serializers.Serializer):
     def validate_email_whitelist(self, value):
         # Normalize + deduplicate
         return list({email.lower().strip() for email in value})
+    
+    def validate_domain_whitelist(self, value):
+        cleaned = []
+        for domain in value:
+            # Hapus @ jika ada
+            d = domain.strip().lower().lstrip('@')
+            if '.' not in d:
+                raise serializers.ValidationError(f"Domain '{d}' tidak valid.")
+            cleaned.append(d)
+        return list(set(cleaned))
 
     def validate_recipient_labels(self, value):
         return [label.strip() for label in value if label.strip()]
@@ -539,6 +556,10 @@ class SecretCreateSerializer(serializers.Serializer):
         for email in email_whitelist:
             EmailWhitelist.objects.create(secret=secret, email=email)
 
+        domain_whitelist = validated_data.get("domain_whitelist", [])
+        for domain in domain_whitelist:
+            DomainWhitelist.objects.create(secret=secret, domain=domain)
+
         # -- Simpan AI detection log --
         if client_risk_score > 0 or client_rules:
             action = (
@@ -626,14 +647,19 @@ class SecretAccessRequestSerializer(serializers.Serializer):
         secret = link.secret
 
         # -- Cek email whitelist --
-        if secret.email_whitelist.exists():
+        if secret.email_whitelist.exists() or secret.domain_whitelist.exists():
             email = data.get("email", "")
             if not email:
                 raise serializers.ValidationError({
                     "email": "Secret ini hanya bisa diakses oleh email tertentu. Masukkan email Anda."
                 })
             whitelist_entry = secret.email_whitelist.filter(email=email).first()
-            if not whitelist_entry:
+
+            # Cek domain
+            domain = email.split("@")[-1].lower() if "@" in email else ""
+            domain_allowed = secret.domain_whitelist.filter(domain=domain).exists()
+
+            if not whitelist_entry and not domain_allowed:
                 # Log akses ditolak
                 self._log_access(link, email, request, AccessLog.AccessResult.DENIED_EMAIL)
                 raise serializers.ValidationError({

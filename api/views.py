@@ -479,7 +479,7 @@ class SecretAccessView(APIView):
             "can_access":       can_access,
             "deny_reason":      reason,
             "secret_type":      secret.secret_type,
-            "requires_email":   secret.email_whitelist.exists(),
+            "requires_email":   secret.email_whitelist.exists() or secret.domain_whitelist.exists(),
             "requires_password": bool(secret.access_password_hash),
             "has_expiry":       bool(secret.expires_at),
             "expires_at":       secret.expires_at,

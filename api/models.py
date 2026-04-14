@@ -489,7 +489,30 @@ class EmailWhitelist(models.Model):
         self.access_count += 1
         self.save(update_fields=["accessed_at", "access_count"])
 
+# ---------------------------------------------------------------------------
+# 6. Domain WHITELIST
+# ---------------------------------------------------------------------------
 
+class DomainWhitelist(models.Model):
+    """
+    Whitelist berdasarkan domain email.
+    Contoh: @companyabc.com — semua email dengan domain ini bisa akses.
+    """
+    id         = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    secret     = models.ForeignKey(Secret, on_delete=models.CASCADE, related_name="domain_whitelist")
+    domain     = models.CharField(
+        max_length=255,
+        help_text="Domain email. Contoh: companyabc.com (tanpa @)"
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "domain_whitelist"
+        unique_together = [("secret", "domain")]
+
+    def __str__(self):
+        return f"@{self.domain} → Secret {self.secret_id}"
+    
 # ---------------------------------------------------------------------------
 # 6. ACCESS LOG
 # ---------------------------------------------------------------------------
