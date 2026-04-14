@@ -5,7 +5,7 @@ from django.utils.html import format_html
 from django.db.models import Count
 
 from .models import (
-    User, AnonymousSession, Secret, SecretLink,
+    DomainWhitelist, User, AnonymousSession, Secret, SecretLink,
     EmailWhitelist, AccessLog, AIDetectionLog, RateLimitConfig,
 )
 
@@ -254,7 +254,21 @@ class EmailWhitelistAdmin(admin.ModelAdmin):
     def secret_short(self, obj):
         return str(obj.secret_id)[:8] + "..."
 
+# ---------------------------------------------------------------------------
+# 6. DOMAIN WHITELIST ADMIN
+# ---------------------------------------------------------------------------
 
+@admin.register(DomainWhitelist)
+class DomainWhitelistAdmin(admin.ModelAdmin):
+    list_display = ("domain", "secret_short", "created_at")
+    search_fields = ("domain", "secret__id")
+    readonly_fields = ("id", "created_at")
+    list_filter = ("created_at",)
+
+    @admin.display(description="Secret")
+    def secret_short(self, obj):
+        return str(obj.secret_id)[:8] + "..."
+    
 # ---------------------------------------------------------------------------
 # 7. ACCESS LOG ADMIN (read-only)
 # ---------------------------------------------------------------------------
