@@ -35,9 +35,9 @@ ALLOWED_HOSTS = ['127.0.0.1', 'localhost', '192.168.21.63']
 # Application definition
 
 INSTALLED_APPS = [
+    'corsheaders',
     'api',
     'django_celery_beat',
-    'corsheaders',
     'rest_framework',
     'django.contrib.admin',
     'django.contrib.auth',
@@ -48,7 +48,8 @@ INSTALLED_APPS = [
 ]
 
 MIDDLEWARE = [
-    'corsheaders.middleware.CorsMiddleware',   
+    'corsheaders.middleware.CorsMiddleware',
+    'whitenoise.middleware.WhiteNoiseMiddleware',   
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',

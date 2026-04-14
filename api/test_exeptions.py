@@ -13,7 +13,7 @@ from rest_framework.exceptions import (
     ValidationError,
 )
 
-from .exceptions import (
+from .exeptions import (
     AccountBannedException,
     ContentBlockedException,
     FileSizeExceededException,

@@ -9,7 +9,7 @@ from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated, AllowAny, BasePermission
 from rest_framework_simplejwt.views import TokenRefreshView as BaseTokenRefreshView
 from .aidetection import run_server_detection
-
+from rest_framework import serializers
 
 from .models import (
     User, Secret, SecretLink,
@@ -190,7 +190,6 @@ class SecretCreateView(APIView):
 
     @transaction.atomic
     def post(self, request):
-    
         serializer = SecretCreateSerializer(
             data=request.data,
             context={"request": request},
@@ -202,27 +201,31 @@ class SecretCreateView(APIView):
             )
     
         vd = serializer.validated_data
+        try:
     
-        # ── Jalankan server-side detection SEBELUM simpan ke DB ──────────────
-        detection = run_server_detection(
-            secret_type           = vd.get("secret_type", ""),
-            mime_type             = vd.get("mime_type", ""),
-            original_filename     = vd.get("original_filename", ""),
-            file_size_bytes       = vd.get("file_size_bytes"),
-            encrypted_payload     = vd.get("encrypted_payload", ""),
-            encryption_iv         = vd.get("encryption_iv", ""),
-            ip_address            = get_client_ip(request),
-            user_agent            = request.META.get("HTTP_USER_AGENT", ""),
-            is_authenticated      = request.user.is_authenticated,
-            client_risk_score     = vd.get("client_risk_score", 0),
-            client_rules_triggered = vd.get("client_rules_triggered", []),
-            num_recipients        = vd.get("num_recipients", 1),
-            has_password          = bool(vd.get("access_password")),
-            has_email_whitelist   = bool(vd.get("email_whitelist")),
-            expires_in_hours      = vd.get("expires_in_hours"),
-            secret                = None,  # belum disimpan
-        )
-    
+            # ── Jalankan server-side detection SEBELUM simpan ke DB ──────────────
+            detection = run_server_detection(
+                secret_type           = vd.get("secret_type", ""),
+                mime_type             = vd.get("mime_type", ""),
+                original_filename     = vd.get("original_filename", ""),
+                file_size_bytes       = vd.get("file_size_bytes"),
+                encrypted_payload     = vd.get("encrypted_payload", ""),
+                encryption_iv         = vd.get("encryption_iv", ""),
+                ip_address            = get_client_ip(request),
+                user_agent            = request.META.get("HTTP_USER_AGENT", ""),
+                is_authenticated      = request.user.is_authenticated,
+                client_risk_score     = vd.get("client_risk_score", 0),
+                client_rules_triggered = vd.get("client_rules_triggered", []),
+                num_recipients        = vd.get("num_recipients", 1),
+                has_password          = bool(vd.get("access_password")),
+                has_email_whitelist   = bool(vd.get("email_whitelist")),
+                expires_in_hours      = vd.get("expires_in_hours"),
+                secret                = None,  # belum disimpan
+            )
+        except Exception as e:
+            return error_response(message=f"Detection error: {str(e)}", status_code=500)
+
+  
         # ── BLOCKED → tolak total ─────────────────────────────────────────────
         if detection.action == "blocked":
             # Simpan log meski secret tidak disimpan
@@ -251,8 +254,19 @@ class SecretCreateView(APIView):
         ai_flagged = combined_score >= 40
     
         # ── Simpan secret (serializer.save() sudah handle links + whitelist) ─
-        secret, links = serializer.save()
-    
+
+        try:
+            secret, links = serializer.create(serializer.validated_data)
+        except Exception as e:
+            from rest_framework.exceptions import ValidationError
+            if isinstance(e, ValidationError):
+                return error_response(
+                    message="Gagal membuat secret.",
+                    errors={"detail": str(e.detail)},
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                )
+            return error_response(message="Gagal menyimpan secret.", status_code=500)
+            
         # Update score dengan hasil gabungan
         secret.ai_risk_score = combined_score
         secret.ai_flagged    = ai_flagged
@@ -399,6 +413,39 @@ class SecretRevokeView(APIView):
             message="Secret berhasil dicabut. Data telah dihapus permanen.",
             status_code=status.HTTP_200_OK,
         )
+
+class SecretDeleteView(APIView):
+    """
+    DELETE /api/secrets/{id}/delete/
+    Hapus riwayat secret dari list dashboard.
+    Hanya bisa dilakukan oleh creator dan hanya untuk secret
+    yang sudah expired/revoked (tidak bisa hapus secret yang masih active).
+    """
+    permission_classes = [IsAuthenticated]
+
+    def delete(self, request, secret_id):
+        try:
+            secret = Secret.objects.get(id=secret_id, creator_user=request.user)
+        except Secret.DoesNotExist:
+            return error_response(
+                message="Secret tidak ditemukan.",
+                status_code=status.HTTP_404_NOT_FOUND,
+            )
+
+        if secret.status == Secret.Status.ACTIVE:
+            return error_response(
+                message="Secret yang masih aktif tidak bisa dihapus. Revoke dulu sebelum menghapus.",
+                status_code=status.HTTP_400_BAD_REQUEST,
+            )
+
+        secret.delete()
+
+        return success_response(
+            message="Riwayat secret berhasil dihapus.",
+            status_code=status.HTTP_200_OK,
+        )
+
+
 
 
 # ===========================================================================

@@ -12,6 +12,7 @@ from .views import (
     SecretDetailView,
     SecretRevokeView,
     MySecretsView,
+    SecretDeleteView,
 
     # SecretLink
     SecretAccessView,
@@ -56,6 +57,7 @@ urlpatterns = [
     path("secrets/my/",             MySecretsView.as_view(),     name="secret-my-list"),
     path("secrets/<uuid:secret_id>/",         SecretDetailView.as_view(), name="secret-detail"),
     path("secrets/<uuid:secret_id>/revoke/",  SecretRevokeView.as_view(), name="secret-revoke"),
+    path("secrets/<uuid:secret_id>/delete/", SecretDeleteView.as_view(), name="secret-delete"),
 
     # ── Secret Link access ────────────────────────────────────────────────
     # GET    /api/s/{token}/    — info link (perlu email/password?)
