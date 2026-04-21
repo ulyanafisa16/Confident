@@ -1,0 +1,155 @@
+{% extends "admin_panel/base.html" %}
+{% block title %}Users — SecretVault Admin{% endblock %}
+{% block nav_users %}active{% endblock %}
+{% block page_title %}Manajemen Users{% endblock %}
+
+{% block topbar_actions %}
+<button class="btn btn-dark btn-sm" onclick="openModal('modal-add-user')">
+  <svg width="13" height="13" fill="none" viewBox="0 0 16 16"><path d="M8 3v10M3 8h10" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+  Tambah User
+</button>
+{% endblock %}
+
+{% block content %}
+
+<!-- FILTER BAR -->
+<div class="filter-bar">
+  <a href="?{% if request.GET.q %}q={{ request.GET.q }}&{% endif %}" class="filter-btn {% if not request.GET.role and not request.GET.status %}active{% endif %}">Semua</a>
+  <a href="?role=user{% if request.GET.q %}&q={{ request.GET.q }}{% endif %}" class="filter-btn {% if request.GET.role == 'user' %}active{% endif %}">User</a>
+  <a href="?role=admin{% if request.GET.q %}&q={{ request.GET.q }}{% endif %}" class="filter-btn {% if request.GET.role == 'admin' %}active{% endif %}">Admin</a>
+  <a href="?status=banned{% if request.GET.q %}&q={{ request.GET.q }}{% endif %}" class="filter-btn {% if request.GET.status == 'banned' %}active{% endif %}">Banned</a>
+  <div style="margin-left:auto">
+    <div class="search-box">
+      <svg class="search-icon" width="14" height="14" fill="none" viewBox="0 0 16 16"><circle cx="7" cy="7" r="5" stroke="#a09e9a" stroke-width="1.5"/><path d="M11 11l3 3" stroke="#a09e9a" stroke-width="1.5" stroke-linecap="round"/></svg>
+      <input type="text" id="search-input" placeholder="Cari email atau nama..." value="{{ request.GET.q }}">
+    </div>
+  </div>
+</div>
+
+<div class="table-card">
+  <div class="table-header">
+    <div class="table-title">
+      Semua Users <span style="color:var(--text-muted);font-weight:400">· {{ page_obj.paginator.count }}</span>
+    </div>
+    <div style="display:flex;gap:8px">
+      <button class="btn btn-red btn-sm" onclick="bulkAction('{% url "admin_panel:users_bulk" %}','ban','Ban {{ "{n}" }} user terpilih?','{{ "{n}" }} user dibanned.')">Ban Dipilih</button>
+      <button class="btn btn-ghost btn-sm" onclick="bulkAction('{% url "admin_panel:users_bulk" %}','promote','Jadikan {{ "{n}" }} user sebagai admin?','{{ "{n}" }} user dipromote.')">→ Admin</button>
+    </div>
+  </div>
+
+  <table>
+    <thead>
+      <tr>
+        <th><input type="checkbox" id="cb-master"></th>
+        <th>User</th>
+        <th>Role</th>
+        <th>Status</th>
+        <th>Total Secrets</th>
+        <th><a href="?{% for k,v in request.GET.items %}{% if k != 'sort' and k != 'page' %}{{ k }}={{ v }}&{% endif %}{% endfor %}sort={% if request.GET.sort == 'joined' %}-joined{% else %}joined{% endif %}" style="color:inherit;text-decoration:none">Bergabung {% if request.GET.sort == 'joined' %}↑{% elif request.GET.sort == '-joined' %}↓{% endif %}</a></th>
+        <th>Aksi</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for user in page_obj %}
+      <tr>
+        <td><input type="checkbox" class="cb-row" data-id="{{ user.id }}"></td>
+        <td>
+          <div class="user-cell">
+            <div class="user-avatar {% if user.is_banned %}banned{% endif %}">
+              {{ user.full_name|slice:":2"|upper|default:user.email|slice:":2"|upper }}
+            </div>
+            <div>
+              <div class="user-email">{{ user.email }}</div>
+              <div class="user-id">id: {{ user.id|stringformat:"s"|slice:":8" }}</div>
+            </div>
+          </div>
+        </td>
+        <td>
+          {% if user.is_admin %}<span class="badge badge-blue">Admin</span>
+          {% else %}<span class="badge badge-gray">User</span>{% endif %}
+        </td>
+        <td>
+          {% if user.is_banned %}<span class="badge badge-red">Banned</span>
+          {% elif user.is_active %}<span class="badge badge-green">Aktif</span>
+          {% else %}<span class="badge badge-gray">Nonaktif</span>{% endif %}
+        </td>
+        <td style="font-family:'DM Mono',monospace;font-size:13px">{{ user.total_secrets_created }}</td>
+        <td style="color:var(--text-muted);font-size:12.5px">{{ user.created_at|date:"d M Y" }}</td>
+        <td>
+          <div class="actions-cell">
+            <button class="btn btn-ghost btn-sm"
+              onclick="loadDetail('{% url "admin_panel:user_detail_api" user.id %}','modal-user-detail')">
+              Detail
+            </button>
+            {% if user.is_banned %}
+            <button class="btn btn-ghost btn-sm"
+              onclick="confirmAction('{% url "admin_panel:user_unban" user.id %}','Unban user ini?','User di-unban.')">
+              Unban
+            </button>
+            {% else %}
+            <button class="btn btn-red btn-sm"
+              onclick="confirmAction('{% url "admin_panel:user_ban" user.id %}','Ban user {{ user.email }}?','User dibanned.')">
+              Ban
+            </button>
+            {% endif %}
+          </div>
+        </td>
+      </tr>
+      {% empty %}
+      <tr><td colspan="7" class="empty-state">Tidak ada user ditemukan.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  {% include "admin_panel/partials/pagination.html" with page_obj=page_obj %}
+</div>
+{% endblock %}
+
+{% block modals %}
+<!-- MODAL DETAIL USER -->
+<div class="modal-overlay" id="modal-user-detail">
+  <div class="modal">
+    <div class="modal-title">Detail User</div>
+    <div id="modal-user-detail-body">
+      <div style="text-align:center;padding:32px"><div class="spinner"></div></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('modal-user-detail')">Tutup</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL TAMBAH USER -->
+<div class="modal-overlay" id="modal-add-user">
+  <div class="modal">
+    <div class="modal-title">Tambah User Baru</div>
+    <div class="modal-sub">User baru akan mendapat email konfirmasi.</div>
+    <form method="POST" action="{% url 'admin_panel:user_create' %}">
+      {% csrf_token %}
+      <div class="form-group">
+        <label class="form-label">Email</label>
+        <input type="email" name="email" class="form-input" placeholder="user@example.com" required>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Nama Lengkap</label>
+        <input type="text" name="full_name" class="form-input" placeholder="Full Name">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Password Sementara</label>
+        <input type="password" name="password" class="form-input" required>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Role</label>
+        <select name="role" class="form-select" style="width:100%">
+          <option value="user">User</option>
+          <option value="admin">Admin</option>
+        </select>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-ghost" onclick="closeModal('modal-add-user')">Batal</button>
+        <button type="submit" class="btn btn-dark">Tambah User</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}

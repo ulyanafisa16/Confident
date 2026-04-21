@@ -37,6 +37,7 @@ ALLOWED_HOSTS = ['127.0.0.1', 'localhost', '192.168.21.63']
 INSTALLED_APPS = [
     'corsheaders',
     'api',
+    'dashboard',
     'django_celery_beat',
     'rest_framework',
     'django.contrib.admin',
@@ -75,6 +76,13 @@ TEMPLATES = [
         },
     },
 ]
+
+TEMPLATES[0]['DIRS'] = [BASE_DIR / 'dashboard' / 'templates']
+STATICFILES_DIRS = [BASE_DIR / 'static']
+
+
+LOGOUT_REDIRECT_URL = '/dashboard/login/'
+LOGIN_REDIRECT_URL = '/dashboard/'
 
 WSGI_APPLICATION = 'confident.wsgi.application'
 

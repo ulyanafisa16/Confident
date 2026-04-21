@@ -1,0 +1,97 @@
+{% extends "admin_panel/base.html" %}
+{% block title %}Rate Limits — SecretVault Admin{% endblock %}
+{% block nav_rate_limits %}active{% endblock %}
+{% block page_title %}Rate Limit Config{% endblock %}
+
+{% block content %}
+<div class="rl-grid">
+  {% for config in configs %}
+  <div class="table-card rl-card">
+    <div class="rl-header">
+      <div>
+        <div class="rl-title">
+          {% if config.user_type == 'anonymous' %}Anonymous User{% else %}Registered User{% endif %}
+        </div>
+        <div class="rl-sub">
+          {% if config.user_type == 'anonymous' %}Belum login{% else %}User login terdaftar{% endif %}
+        </div>
+      </div>
+      {% if config.is_active %}<span class="badge badge-green">Aktif</span>
+      {% else %}<span class="badge badge-gray">Nonaktif</span>{% endif %}
+    </div>
+
+    <div class="detail-row">
+      <div class="detail-label">Max Secrets / Hari</div>
+      <div class="detail-val" style="font-family:'DM Mono',monospace;font-weight:500">
+        {{ config.max_secrets_per_day }}
+      </div>
+    </div>
+    <div class="detail-row">
+      <div class="detail-label">Max File Size</div>
+      <div class="detail-val" style="font-family:'DM Mono',monospace;font-weight:500">
+        {{ config.max_file_size_mb }} MB
+      </div>
+    </div>
+    <div class="detail-row">
+      <div class="detail-label">Max Recipients</div>
+      <div class="detail-val" style="font-family:'DM Mono',monospace;font-weight:500">
+        {{ config.max_recipients }}
+      </div>
+    </div>
+    <div class="detail-row">
+      <div class="detail-label">Max Expiry Days</div>
+      <div class="detail-val" style="font-family:'DM Mono',monospace;font-weight:500">
+        {% if config.max_expiry_days == 0 %}Tidak terbatas{% else %}{{ config.max_expiry_days }} hari{% endif %}
+      </div>
+    </div>
+
+    <div>
+      <button class="btn btn-dark "
+        onclick="openModal('modal-edit-rl-{{ config.id }}')">
+        Edit Konfigurasi
+      </button>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% endblock %}
+
+{% block modals %}
+{% for config in configs %}
+<div class="modal-overlay" id="modal-edit-rl-{{ config.id }}">
+  <div class="modal">
+    <div class="modal-title">Edit Rate Limit — {{ config.get_user_type_display }}</div>
+    <form method="POST" action="{% url 'admin_panel:rate_limit_update' config.id %}">
+      {% csrf_token %}
+      <div class="form-group">
+        <label class="form-label">Max Secrets per Hari</label>
+        <input type="number" name="max_secrets_per_day" class="form-input" value="{{ config.max_secrets_per_day }}" min="1">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Max File Size (MB)</label>
+        <input type="number" name="max_file_size_mb" class="form-input" value="{{ config.max_file_size_mb }}" min="1">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Max Recipients</label>
+        <input type="number" name="max_recipients" class="form-input" value="{{ config.max_recipients }}" min="1">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Max Expiry Days (0 = unlimited)</label>
+        <input type="number" name="max_expiry_days" class="form-input" value="{{ config.max_expiry_days }}" min="0">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Status</label>
+        <select name="is_active" class="form-select" style="width:100%">
+          <option value="1" {% if config.is_active %}selected{% endif %}>Aktif</option>
+          <option value="0" {% if not config.is_active %}selected{% endif %}>Nonaktif</option>
+        </select>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-ghost" onclick="closeModal('modal-edit-rl-{{ config.id }}')">Batal</button>
+        <button type="submit" class="btn btn-dark">Simpan</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endfor %}
+{% endblock %}

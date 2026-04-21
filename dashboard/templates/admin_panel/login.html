@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Login - SecretDrop</title>
+
+    {% load static %}
+    <link rel="stylesheet" href="{% static 'admin_panel/css/admin.css' %}">
+
+</head>
+<body>
+
+<body class="login-page">
+
+<div class="login-card">
+    <div class="login-header">
+        <h2>SecretDrop</h2>
+        <p>Admin</p>
+    </div>
+
+    <form method="post">
+        {% csrf_token %}
+
+        <label>Username</label>
+        {{ form.username }}
+
+        <label>Password</label>
+        {{ form.password }}
+
+        <button type="submit">Login</button>
+    </form>
+
+    {% if form.errors %}
+        <div class="errorlist">
+            Email atau password salah
+        </div>
+    {% endif %}
+</div>
+
+</body>
+</html>

@@ -1,0 +1,54 @@
+{% extends "admin_panel/base.html" %}
+{% block title %}Anon Sessions — SecretVault Admin{% endblock %}
+{% block nav_anon %}active{% endblock %}
+{% block page_title %}Anonymous Sessions{% endblock %}
+
+{% block content %}
+<div class="table-card">
+  <div class="table-header">
+    <div class="table-title">Anonymous Sessions <span style="color:var(--text-muted);font-weight:400">· {{ page_obj.paginator.count }}</span></div>
+    <div class="search-box">
+      <svg class="search-icon" width="14" height="14" fill="none" viewBox="0 0 16 16"><circle cx="7" cy="7" r="5" stroke="#a09e9a" stroke-width="1.5"/><path d="M11 11l3 3" stroke="#a09e9a" stroke-width="1.5" stroke-linecap="round"/></svg>
+      <input type="text" id="search-input" placeholder="Cari IP atau fingerprint..." value="{{ request.GET.q }}">
+    </div>
+  </div>
+
+  <table>
+    <thead>
+      <tr>
+        <th>IP Address</th><th>Fingerprint Hash</th><th>Secrets Hari Ini</th>
+        <th>Limit</th><th>Last Reset</th><th>Pertama Kali</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for session in page_obj %}
+      {% with pct=session.daily_count|floatformat:"0" limit=session.max_secrets_per_day %}
+      <tr>
+        <td style="font-family:'DM Mono',monospace;font-size:13px">{{ session.ip_address }}</td>
+        <td><span class="mono" style="color:var(--text-muted)">{{ session.fingerprint_hash|slice:":16" }}…</span></td>
+        <td style="font-family:'DM Mono',monospace;font-size:13px">{{ session.daily_count }}</td>
+        <td>
+          <div class="progress-wrap">
+            <div class="progress-bar">
+              {% widthratio session.daily_count 3 100 as bar_pct %}
+              <div class="progress-fill {% if session.daily_count >= 3 %}full{% elif session.daily_count == 2 %}mid{% else %}low{% endif %}"
+                   style="width:{% widthratio session.daily_count 3 100 %}%"></div>
+            </div>
+            <span style="font-size:12px;{% if session.daily_count >= 3 %}color:var(--red){% else %}color:var(--text-muted){% endif %}">
+              {{ session.daily_count }}/3{% if session.daily_count >= 3 %} (limit){% endif %}
+            </span>
+          </div>
+        </td>
+        <td style="font-size:12px;color:var(--text-muted)">{{ session.last_reset_date|date:"d M Y" }}</td>
+        <td style="font-size:12px;color:var(--text-muted)">{{ session.created_at|date:"d M Y" }}</td>
+      </tr>
+      {% endwith %}
+      {% empty %}
+      <tr><td colspan="6" class="empty-state">Tidak ada session ditemukan.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  {% include "admin_panel/partials/pagination.html" with page_obj=page_obj %}
+</div>
+{% endblock %}

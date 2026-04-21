@@ -51,9 +51,9 @@ def expire_secrets(self):
             with transaction.atomic():
                 ids = list(
                     Secret.objects.filter(
-                        status          = Secret.Status.ACTIVE,
-                        expires_at__lte = now,
-                    ).values_list("id", flat=True)[:batch_size]
+                        Q(status=Secret.Status.EXPIRED, expired_at__lte=cutoff) |
+                        Q(status=Secret.Status.REVOKED, revoked_at__lte=cutoff)
+                    ).values_list("id", flat=True)[:500]
                 )
 
                 if not ids:

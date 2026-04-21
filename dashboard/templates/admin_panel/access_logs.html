@@ -1,0 +1,64 @@
+{% extends "admin_panel/base.html" %}
+{% block title %}Access Logs — SecretVault Admin{% endblock %}
+{% block nav_access_logs %}active{% endblock %}
+{% block page_title %}Access Logs{% endblock %}
+
+{% block content %}
+<div class="table-card">
+  <div class="table-header">
+    <div class="table-title">Access Logs <span style="color:var(--text-muted);font-weight:400">· {{ page_obj.paginator.count }}</span></div>
+    <div style="display:flex;gap:8px">
+      <select class="form-select" onchange="window.location='?result='+this.value">
+        <option value="">Semua Hasil</option>
+        <option value="success"          {% if request.GET.result == 'success' %}selected{% endif %}>Berhasil</option>
+        <option value="denied_password"  {% if request.GET.result == 'denied_password' %}selected{% endif %}>Password Salah</option>
+        <option value="denied_email"     {% if request.GET.result == 'denied_email' %}selected{% endif %}>Email Ditolak</option>
+        <option value="denied_expired"   {% if request.GET.result == 'denied_expired' %}selected{% endif %}>Expired</option>
+        <option value="denied_revoked"   {% if request.GET.result == 'denied_revoked' %}selected{% endif %}>Revoked</option>
+        <option value="denied_exhausted" {% if request.GET.result == 'denied_exhausted' %}selected{% endif %}>Exhausted</option>
+        <option value="denied_blocked"   {% if request.GET.result == 'denied_blocked' %}selected{% endif %}>Blocked</option>
+      </select>
+      <div class="search-box">
+        <svg class="search-icon" width="14" height="14" fill="none" viewBox="0 0 16 16"><circle cx="7" cy="7" r="5" stroke="#a09e9a" stroke-width="1.5"/><path d="M11 11l3 3" stroke="#a09e9a" stroke-width="1.5" stroke-linecap="round"/></svg>
+        <input type="text" id="search-input" placeholder="Cari IP atau email..." value="{{ request.GET.q }}">
+      </div>
+    </div>
+  </div>
+
+  <table>
+    <thead>
+      <tr><th>Waktu</th><th>Token</th><th>Hasil</th><th>Email Accessor</th><th>IP Address</th><th>User Agent</th></tr>
+    </thead>
+    <tbody>
+      {% for log in page_obj %}
+      <tr>
+        <td style="font-size:12px;white-space:nowrap;color:var(--text-muted)">
+          {{ log.accessed_at|date:"d M H:i:s" }}
+        </td>
+        <td>
+          <span class="mono" {% if log.result == 'success' %}style="color:var(--blue)"{% endif %}>
+            {{ log.secret_link.token }}
+          </span>
+        </td>
+        <td>
+          {% if log.result == 'success' %}
+            <span class="badge badge-green">Berhasil</span>
+          {% else %}
+            <span class="badge badge-red">{{ log.get_result_display }}</span>
+          {% endif %}
+        </td>
+        <td style="font-size:12.5px">{{ log.accessed_by_email|default:"–" }}</td>
+        <td style="font-family:'DM Mono',monospace;font-size:12px">{{ log.ip_address|default:"–" }}</td>
+        <td style="font-size:11.5px;color:var(--text-muted);max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">
+          {{ log.user_agent|truncatechars:50 }}
+        </td>
+      </tr>
+      {% empty %}
+      <tr><td colspan="6" class="empty-state">Tidak ada log ditemukan.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  {% include "admin_panel/partials/pagination.html" with page_obj=page_obj %}
+</div>
+{% endblock %}

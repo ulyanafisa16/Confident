@@ -1,0 +1,9 @@
+{% comment %}
+Usage: {% include "admin_panel/partials/status_badge.html" with status=obj.status %}
+{% endcomment %}
+{% if status == "active" %}<span class="badge badge-green">Aktif</span>
+{% elif status == "revoked" %}<span class="badge badge-gray">Dicabut</span>
+{% elif status == "expired" %}<span class="badge badge-amber">Expired</span>
+{% elif status == "blocked" %}<span class="badge badge-red">Blocked</span>
+{% else %}<span class="badge badge-gray">{{ status }}</span>
+{% endif %}

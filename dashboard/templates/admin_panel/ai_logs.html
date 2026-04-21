@@ -1,0 +1,127 @@
+{% extends "admin_panel/base.html" %}
+{% block title %}AI Detection — SecretVault Admin{% endblock %}
+{% block nav_ai_logs %}active{% endblock %}
+{% block page_title %}AI Detection Logs{% endblock %}
+
+{% block content %}
+{% if unreviewed_count > 0 %}
+<div class="alert-banner alert-info">
+  <svg width="16" height="16" fill="none" viewBox="0 0 16 16" style="flex-shrink:0;margin-top:1px">
+    <circle cx="8" cy="8" r="6" stroke="currentColor" stroke-width="1.5"/>
+    <path d="M8 7v5M8 5.5v.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+  </svg>
+  <div>Terdapat <strong>{{ unreviewed_count }} detection log</strong> yang belum direview.</div>
+</div>
+{% endif %}
+
+<!-- TABS -->
+<div class="tabs">
+  <a href="?" class="tab {% if not request.GET.reviewed and not request.GET.source %}active{% endif %}">Semua</a>
+  <a href="?reviewed=0" class="tab {% if request.GET.reviewed == '0' %}active{% endif %}">Belum Review</a>
+  <a href="?source=client" class="tab {% if request.GET.source == 'client' %}active{% endif %}">Client Scan</a>
+  <a href="?source=server" class="tab {% if request.GET.source == 'server' %}active{% endif %}">Server Scan</a>
+</div>
+
+<div class="table-card">
+  <div class="table-header">
+    <div class="table-title">AI Detection Logs <span style="color:var(--text-muted);font-weight:400">· {{ page_obj.paginator.count }}</span></div>
+    <div style="display:flex;gap:8px">
+      <button class="btn btn-ghost btn-sm"
+        onclick="bulkAction('{% url "admin_panel:ai_logs_bulk" %}','approve','Approve {{ "{n}" }} log sebagai aman?','{{ "{n}" }} log di-approve.')">
+        ✓ Approve Semua Dipilih
+      </button>
+      <button class="btn btn-red btn-sm"
+        onclick="bulkAction('{% url "admin_panel:ai_logs_bulk" %}','block','Block {{ "{n}" }} secret dari log ini?','{{ "{n}" }} secret diblokir.')">
+        ✕ Block Semua Dipilih
+      </button>
+    </div>
+  </div>
+
+  <table>
+    <thead>
+      <tr>
+        <th><input type="checkbox" id="cb-master"></th>
+        <th>Waktu</th><th>Source</th><th>Score</th><th>Rules Triggered</th>
+        <th>Action</th><th>Secret</th><th>Review</th><th>Aksi</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for log in page_obj %}
+      <tr class="{% if log.action_taken == 'flagged' %}row-flagged{% elif log.action_taken == 'blocked' %}row-blocked{% endif %}">
+        <td><input type="checkbox" class="cb-row" data-id="{{ log.id }}"></td>
+        <td style="font-size:12px;color:var(--text-muted);white-space:nowrap">
+          {{ log.created_at|date:"d M H:i" }}
+        </td>
+        <td>
+          {% if log.source == 'client' %}<span class="badge badge-blue">Client</span>
+          {% else %}<span class="badge badge-gray">Server</span>{% endif %}
+        </td>
+        <td>
+          <div class="score-wrap">
+            <div class="score-bar">
+              <div class="score-fill {% if log.risk_score >= 70 %}high{% elif log.risk_score >= 40 %}mid{% else %}low{% endif %}"
+                   style="width:{{ log.risk_score }}%"></div>
+            </div>
+            <span class="score-num">{{ log.risk_score }}</span>
+          </div>
+        </td>
+        <td style="font-size:12px">
+          {% for rule in log.rules_triggered|slice:":2" %}{{ rule }}{% if not forloop.last %}, {% endif %}{% endfor %}
+          {% if log.rules_triggered|length > 2 %} <span style="color:var(--text-muted)">+{{ log.rules_triggered|length|add:"-2" }}</span>{% endif %}
+        </td>
+        <td>
+          {% if log.action_taken == 'allowed' %}<span class="badge badge-green">Allowed</span>
+          {% elif log.action_taken == 'flagged' %}<span class="badge badge-amber">Flagged</span>
+          {% else %}<span class="badge badge-red">Blocked</span>{% endif %}
+        </td>
+        <td>
+          {% if log.secret %}<span class="mono">{{ log.secret_id|stringformat:"s"|slice:":8" }}…</span>
+          {% else %}<span style="color:var(--text-muted)">–</span>{% endif %}
+        </td>
+        <td>
+          {% if log.reviewed_at %}<span class="badge badge-green">Sudah</span>
+          {% else %}<span class="badge badge-amber">Belum</span>{% endif %}
+        </td>
+        <td>
+          <div class="actions-cell">
+            {% if not log.reviewed_at %}
+            <button class="btn btn-ghost btn-sm"
+              onclick="confirmAction('{% url "admin_panel:ai_log_approve" log.id %}','Tandai log ini aman?','Log ditandai aman.')">
+              ✓ Aman
+            </button>
+            <button class="btn btn-red btn-sm"
+              onclick="confirmAction('{% url "admin_panel:ai_log_block" log.id %}','Block secret terkait?','Secret diblokir.')">
+              ✕ Block
+            </button>
+            {% else %}
+            <button class="btn btn-ghost btn-sm"
+              onclick="loadDetail('{% url "admin_panel:ai_log_detail_api" log.id %}','modal-log-detail')">
+              Lihat
+            </button>
+            {% endif %}
+          </div>
+        </td>
+      </tr>
+      {% empty %}
+      <tr><td colspan="9" class="empty-state">Tidak ada log ditemukan.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  {% include "admin_panel/partials/pagination.html" with page_obj=page_obj %}
+</div>
+{% endblock %}
+
+{% block modals %}
+<div class="modal-overlay" id="modal-log-detail">
+  <div class="modal">
+    <div class="modal-title">Detail AI Detection Log</div>
+    <div id="modal-log-detail-body">
+      <div style="text-align:center;padding:32px"><div class="spinner"></div></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('modal-log-detail')">Tutup</button>
+    </div>
+  </div>
+</div>
+{% endblock %}

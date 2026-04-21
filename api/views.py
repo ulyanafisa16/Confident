@@ -10,7 +10,6 @@ from rest_framework.permissions import IsAuthenticated, AllowAny, BasePermission
 from rest_framework_simplejwt.views import TokenRefreshView as BaseTokenRefreshView
 from .aidetection import run_server_detection
 from rest_framework import serializers
-
 from .models import (
     User, Secret, SecretLink,
     AccessLog, AIDetectionLog,
@@ -986,5 +985,3 @@ class AdminAccessLogsView(APIView):
             "per_page": per_page,
             "logs":     AccessLogSerializer(logs, many=True).data,
         })
-    
-

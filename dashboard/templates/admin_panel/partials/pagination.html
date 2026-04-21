@@ -1,0 +1,32 @@
+{% comment %}
+Usage: {% include "admin_panel/partials/pagination.html" with page_obj=page_obj %}
+{% endcomment %}
+<div class="pagination">
+  <div class="page-info">
+    Menampilkan {{ page_obj.start_index }}–{{ page_obj.end_index }}
+    dari {{ page_obj.paginator.count }} data
+  </div>
+  <div class="page-btns">
+    {% if page_obj.has_previous %}
+    <a href="?{% for k,v in request.GET.items %}{% if k != 'page' %}{{ k }}={{ v }}&{% endif %}{% endfor %}page={{ page_obj.previous_page_number }}" class="page-btn">‹</a>
+    {% else %}
+    <button class="page-btn" disabled style="opacity:.4">‹</button>
+    {% endif %}
+
+    {% for num in page_obj.paginator.page_range %}
+      {% if page_obj.number == num %}
+        <button class="page-btn active">{{ num }}</button>
+      {% elif num == 1 or num == page_obj.paginator.num_pages or num|add:"-2" <= page_obj.number and page_obj.number <= num|add:"2" %}
+        <a href="?{% for k,v in request.GET.items %}{% if k != 'page' %}{{ k }}={{ v }}&{% endif %}{% endfor %}page={{ num }}" class="page-btn">{{ num }}</a>
+      {% elif num == 2 or num == page_obj.paginator.num_pages|add:"-1" %}
+        <span class="page-btn" style="cursor:default">…</span>
+      {% endif %}
+    {% endfor %}
+
+    {% if page_obj.has_next %}
+    <a href="?{% for k,v in request.GET.items %}{% if k != 'page' %}{{ k }}={{ v }}&{% endif %}{% endfor %}page={{ page_obj.next_page_number }}" class="page-btn">›</a>
+    {% else %}
+    <button class="page-btn" disabled style="opacity:.4">›</button>
+    {% endif %}
+  </div>
+</div>

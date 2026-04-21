@@ -1,0 +1,187 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>{% block title %}SecretDrop{% endblock %} — Admin</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="{% static 'admin_panel/css/admin.css' %}?v=2">
+{% block extra_css %}{% endblock %}
+</head>
+<body>
+
+<!-- Sidebar overlay (mobile) -->
+<div class="sidebar-overlay" id="sidebar-overlay" onclick="closeSidebar()"></div>
+
+<!-- SIDEBAR -->
+<aside class="sidebar" id="sidebar">
+
+  <!-- Logo -->
+  <div class="sidebar-logo">
+    <div class="logo-mark">
+      <svg width="14" height="14" fill="none" viewBox="0 0 16 16">
+        <rect x="3" y="7" width="10" height="8" rx="1.5" stroke="currentColor" stroke-width="1.5"/>
+        <path d="M5 7V5a3 3 0 016 0v2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+      </svg>
+    </div>
+    <span class="logo-text">SecretDrop</span>
+  </div>
+
+  <!-- Nav -->
+  <nav class="sidebar-nav">
+
+    <div class="nav-section">Overview</div>
+    <a href="{% url 'admin_panel:dashboard' %}" class="nav-item {% block nav_dashboard %}{% endblock %}">
+      <span class="nav-icon">
+        <svg width="15" height="15" fill="none" viewBox="0 0 16 16">
+          <rect x="1" y="1" width="6" height="6" rx="1.5" fill="currentColor" opacity=".8"/>
+          <rect x="9" y="1" width="6" height="6" rx="1.5" fill="currentColor" opacity=".8"/>
+          <rect x="1" y="9" width="6" height="6" rx="1.5" fill="currentColor" opacity=".8"/>
+          <rect x="9" y="9" width="6" height="6" rx="1.5" fill="currentColor" opacity=".8"/>
+        </svg>
+      </span>
+      Dashboard
+    </a>
+
+    <div class="nav-section">Kelola</div>
+    <a href="{% url 'admin_panel:users' %}" class="nav-item {% block nav_users %}{% endblock %}">
+      <span class="nav-icon">
+        <svg width="15" height="15" fill="none" viewBox="0 0 16 16">
+          <circle cx="8" cy="5" r="3" stroke="currentColor" stroke-width="1.5"/>
+          <path d="M2 13c0-3 2.7-5 6-5s6 2 6 5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+        </svg>
+      </span>
+      Users
+    </a>
+
+    <a href="{% url 'admin_panel:secrets' %}" class="nav-item {% block nav_secrets %}{% endblock %}">
+      <span class="nav-icon">
+        <svg width="15" height="15" fill="none" viewBox="0 0 16 16">
+          <rect x="3" y="7" width="10" height="8" rx="1.5" stroke="currentColor" stroke-width="1.5"/>
+          <path d="M5 7V5a3 3 0 016 0v2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+        </svg>
+      </span>
+      Secrets
+    </a>
+
+    <a href="{% url 'admin_panel:links' %}" class="nav-item {% block nav_links %}{% endblock %}">
+      <span class="nav-icon">
+        <svg width="15" height="15" fill="none" viewBox="0 0 16 16">
+          <path d="M6 8a2.5 2.5 0 003.5.5l2-2a2.5 2.5 0 00-3.5-3.5L6.5 4.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+          <path d="M10 8a2.5 2.5 0 00-3.5-.5l-2 2a2.5 2.5 0 003.5 3.5l1.5-1.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+        </svg>
+      </span>
+      Secret Links
+    </a>
+
+    <div class="nav-section">Monitoring</div>
+    <a href="{% url 'admin_panel:ai_logs' %}" class="nav-item {% block nav_ai_logs %}{% endblock %}">
+      <span class="nav-icon">
+        <svg width="15" height="15" fill="none" viewBox="0 0 16 16">
+          <circle cx="8" cy="8" r="6" stroke="currentColor" stroke-width="1.5"/>
+          <path d="M5.5 8h5M8 5.5v5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+        </svg>
+      </span>
+      AI Detection
+      {% if ai_flagged_count > 0 %}
+      <span class="nav-badge">{{ ai_flagged_count }}</span>
+      {% endif %}
+    </a>
+
+    <a href="{% url 'admin_panel:access_logs' %}" class="nav-item {% block nav_access_logs %}{% endblock %}">
+      <span class="nav-icon">
+        <svg width="15" height="15" fill="none" viewBox="0 0 16 16">
+          <path d="M2 4h12M2 8h9M2 12h6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+        </svg>
+      </span>
+      Access Logs
+    </a>
+
+    <div class="nav-section">Konfigurasi</div>
+    <a href="{% url 'admin_panel:rate_limits' %}" class="nav-item {% block nav_rate_limits %}{% endblock %}">
+      <span class="nav-icon">
+        <svg width="15" height="15" fill="none" viewBox="0 0 16 16">
+          <circle cx="8" cy="8" r="6" stroke="currentColor" stroke-width="1.5"/>
+          <path d="M8 5v3.5l2 2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+        </svg>
+      </span>
+      Rate Limits
+    </a>
+
+    <a href="{% url 'admin_panel:anon_sessions' %}" class="nav-item {% block nav_anon %}{% endblock %}">
+      <span class="nav-icon">
+        <svg width="15" height="15" fill="none" viewBox="0 0 16 16">
+          <circle cx="8" cy="6" r="2.5" stroke="currentColor" stroke-width="1.5"/>
+          <circle cx="8" cy="8" r="6" stroke="currentColor" stroke-width="1.5"/>
+          <path d="M4 13.5C4.5 11.5 6 10.5 8 10.5s3.5 1 4 2.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+        </svg>
+      </span>
+      Anon Sessions
+    </a>
+
+  </nav>
+
+  <!-- Footer -->
+  <div class="sidebar-footer">
+    <div class="user-avatar">{{ request.user.email|first|upper }}</div>
+    <div class="user-info">
+      <div class="name">{{ request.user.full_name|default:request.user.email|truncatechars:18 }}</div>
+      <div class="role">{{ request.user.get_role_display|default:"Admin" }}</div>
+    </div>
+    <form action="{% url 'admin_panel:logout' %}" method="post" style="margin:0">
+      {% csrf_token %}
+      <button type="submit" class="logout-btn" title="Logout">
+        <svg width="14" height="14" fill="none" viewBox="0 0 16 16">
+          <path d="M10 8H3M6 5l-3 3 3 3M9 3h4a1 1 0 011 1v8a1 1 0 01-1 1H9" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </button>
+    </form>
+  </div>
+
+</aside>
+
+<!-- MAIN -->
+<main class="main">
+
+  <!-- Topbar -->
+  <div class="topbar">
+    <button class="hamburger" id="hamburger-btn" onclick="openSidebar()" aria-label="Menu">
+      <svg width="16" height="16" fill="none" viewBox="0 0 16 16">
+        <path d="M2 4h12M2 8h12M2 12h12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+      </svg>
+    </button>
+    <div class="topbar-title">{% block page_title %}Dashboard{% endblock %}</div>
+    <div class="topbar-actions">{% block topbar_actions %}{% endblock %}</div>
+  </div>
+
+  <!-- Flash messages -->
+  <div id="flash-container" style="position:fixed;top:68px;right:20px;z-index:400;display:flex;flex-direction:column;gap:8px;min-width:300px;max-width:380px">
+    {% if messages %}
+      {% for message in messages %}
+      <div class="alert-banner alert-{{ message.tags }}" style="box-shadow:0 8px 24px rgba(0,0,0,.4)">
+        <svg width="15" height="15" fill="none" viewBox="0 0 16 16" style="flex-shrink:0;margin-top:1px">
+          <circle cx="8" cy="8" r="6" stroke="currentColor" stroke-width="1.5"/>
+          <path d="M8 7v4M8 5.5v.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+        </svg>
+        <span>{{ message }}</span>
+      </div>
+      {% endfor %}
+    {% endif %}
+  </div>
+
+  <!-- Content -->
+  <div class="content">
+    {% block content %}{% endblock %}
+  </div>
+
+</main>
+
+{% block modals %}{% endblock %}
+
+<script src="{% static 'admin_panel/js/admin.js' %}" defer></script>
+{% block extra_js %}{% endblock %}
+</body>
+</html>
