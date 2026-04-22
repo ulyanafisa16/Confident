@@ -136,15 +136,17 @@ class AnonymousSession(models.Model):
         ]
 
     def __str__(self):
-        return f"Anon {self.ip_address} ({self.daily_count}/3 hari ini)"
-
+        return f"Anon {self.ip_address} ({self.daily_count}/{self.max_secrets_per_day} hari ini)"
+    
     @property
     def max_file_size_mb(self):
-        return 10  # MB untuk anon
+        config = RateLimitConfig.get_for_anonymous()
+        return config.max_file_size_mb
 
     @property
     def max_secrets_per_day(self):
-        return 3
+        config = RateLimitConfig.get_for_anonymous()
+        return config.max_secrets_per_day
 
     def reset_if_new_day(self):
         """Reset counter jika sudah hari baru."""

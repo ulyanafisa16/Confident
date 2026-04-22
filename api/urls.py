@@ -27,6 +27,13 @@ from .views import (
     AdminUserActionView,
     AdminStatsView,
     AdminAccessLogsView,
+
+    QuotaStatusView, 
+    RateLimitConfigView,
+
+    ForgotPasswordView,
+    ValidateResetTokenView,
+    ResetPasswordConfirmView,
 )
 
 # ---------------------------------------------------------------------------
@@ -88,4 +95,21 @@ urlpatterns = [
     path("admin/users/",                         AdminUserListView.as_view(),     name="admin-user-list"),
     path("admin/users/<uuid:user_id>/action/",   AdminUserActionView.as_view(),   name="admin-user-action"),
     path("admin/access-logs/",                   AdminAccessLogsView.as_view(),   name="admin-access-logs"),
-]
+
+    # ── Quota & Rate Limit ───────────────────────────────────────────────
+    # GET    /api/quota/           — status kuota harian (sisa anon, sisa user)
+    # GET/POST /api/rate-limit/    — view/update konfigurasi rate limit (ADMIN)
+
+    path("config/quota-status/",  QuotaStatusView.as_view(),     name="quota-status"),
+    path("config/rate-limits/",   RateLimitConfigView.as_view(), name="rate-limits"),
+    
+
+    # ── Password Reset ───────────────────────────────────────────────────
+    # POST   /api/auth/forgot-password/          — request reset password
+    # POST   /api/auth/validate-reset-token/     — validasi token reset
+    # POST   /api/auth/reset-password-confirm/   — set password baru
+
+    path("auth/forgot-password/",          ForgotPasswordView.as_view(),       name="forgot-password"),
+    path("auth/reset-password/validate/",  ValidateResetTokenView.as_view(),   name="reset-password-validate"),
+    path("auth/reset-password/confirm/",   ResetPasswordConfirmView.as_view(), name="reset-password-confirm"),
+    ]

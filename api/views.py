@@ -2,7 +2,13 @@ from django.shortcuts import render
 from django.utils import timezone
 from django.db.models import Count, Q
 from django.db import transaction
+from django.core.cache import cache
 
+import logging
+import secrets
+import hashlib
+
+from rest_framework_simplejwt.authentication import JWTAuthentication
 from rest_framework import status
 from rest_framework.views import APIView
 from rest_framework.response import Response
@@ -32,6 +38,130 @@ from .serializers import (
     AccessLogSerializer,
 )
 
+logger = logging.getLogger(__name__)
+
+
+
+def get_client_ip(request):
+        x_forwarded = request.META.get("HTTP_X_FORWARDED_FOR")
+        if x_forwarded:
+            return x_forwarded.split(",")[0].strip()
+        return request.META.get("REMOTE_ADDR", "")
+
+class QuotaStatusView(APIView):
+    permission_classes = [AllowAny]
+ 
+    def get(self, request):
+        # Coba autentikasi JWT dulu — kalau ada token valid, user login
+        user = self._try_get_authenticated_user(request)
+ 
+        if user and user.is_authenticated:
+            return self._quota_for_registered(request, user)
+        return self._quota_for_anonymous(request)
+ 
+    def _try_get_authenticated_user(self, request):
+        """
+        Coba autentikasi JWT tanpa raise exception.
+        Return user jika token valid, None jika tidak ada atau invalid.
+        """
+        try:
+            auth = JWTAuthentication()
+            result = auth.authenticate(request)
+            if result:
+                return result[0]
+        except Exception:
+            pass
+        return None
+ 
+    def _quota_for_registered(self, request, user):
+        from .models import Secret, RateLimitConfig
+ 
+        config    = RateLimitConfig.get_for_registered()
+        today_start = timezone.now().replace(hour=0, minute=0, second=0, microsecond=0)
+        used_today  = Secret.objects.filter(
+            creator_user=user,
+            created_at__gte=today_start,
+        ).count()
+ 
+        return Response({
+            "user_type":       "registered",
+            "max_per_day":     None,   # unlimited
+            "used_today":      used_today,
+            "remaining":       None,   # unlimited
+            "resets_at":       None,
+            "max_file_size_mb": config.max_file_size_mb,
+            "max_recipients":  config.max_recipients,
+            "max_expiry_days": config.max_expiry_days,
+        })
+ 
+    def _quota_for_anonymous(self, request):
+        from .models import AnonymousSession, RateLimitConfig
+ 
+        config           = RateLimitConfig.get_for_anonymous()
+        ip               = get_client_ip(request)
+        fingerprint_hash = request.META.get("HTTP_X_FINGERPRINT_HASH", "").strip()
+ 
+        # Cari atau buat AnonymousSession
+        session = None
+        if ip and fingerprint_hash:
+            session, _ = AnonymousSession.objects.get_or_create(
+                ip_address       = ip,
+                fingerprint_hash = fingerprint_hash,
+            )
+            session.reset_if_new_day()
+        elif ip:
+            # Fallback — hanya IP, tanpa fingerprint
+            session = AnonymousSession.objects.filter(
+                ip_address=ip
+            ).order_by("-created_at").first()
+            if session:
+                session.reset_if_new_day()
+ 
+        used_today = session.daily_count if session else 0
+        max_per_day = config.max_secrets_per_day
+        remaining   = max(0, max_per_day - used_today)
+ 
+        # Waktu reset — tengah malam WIB (UTC+7)
+        now         = timezone.now()
+        tomorrow    = (now + timezone.timedelta(days=1)).replace(
+            hour=0, minute=0, second=0, microsecond=0
+        )
+ 
+        return Response({
+            "user_type":        "anonymous",
+            "max_per_day":      max_per_day,
+            "used_today":       used_today,
+            "remaining":        remaining,
+            "resets_at":        tomorrow.isoformat(),
+            "max_file_size_mb": config.max_file_size_mb,
+            "max_recipients":   config.max_recipients,
+            "max_expiry_days":  config.max_expiry_days,
+        })
+
+class RateLimitConfigView(APIView):
+
+    permission_classes = [AllowAny]
+ 
+    def get(self, request):
+        from .models import RateLimitConfig
+ 
+        anon = RateLimitConfig.get_for_anonymous()
+        reg  = RateLimitConfig.get_for_registered()
+ 
+        return Response({
+            "anonymous": {
+                "max_secrets_per_day": anon.max_secrets_per_day,
+                "max_file_size_mb":    anon.max_file_size_mb,
+                "max_recipients":      anon.max_recipients,
+                "max_expiry_days":     anon.max_expiry_days,
+            },
+            "registered": {
+                "max_secrets_per_day": reg.max_secrets_per_day,
+                "max_file_size_mb":    reg.max_file_size_mb,
+                "max_recipients":      reg.max_recipients,
+                "max_expiry_days":     reg.max_expiry_days,
+            },
+        })
 
 # ===========================================================================
 # PERMISSIONS
@@ -146,7 +276,354 @@ class LoginView(APIView):
             },
             message="Login berhasil.",
         )
+RESET_TOKEN_TTL = 60 * 60  # detik
+ 
+# Prefix cache key
+CACHE_PREFIX = "pwd_reset:"
+ 
+ 
+def _make_cache_key(token: str) -> str:
+    """Hash token sebelum simpan ke cache — jangan simpan token plain."""
+    hashed = hashlib.sha256(token.encode()).hexdigest()
+    return f"{CACHE_PREFIX}{hashed}"
+ 
+ 
+def _send_reset_email(to_email: str, reset_url: str) -> bool:
+    """
+    Kirim email reset password via SendGrid.
+    Return True jika berhasil, False jika gagal.
+    """
+    import os
+    from sendgrid import SendGridAPIClient
+    from sendgrid.helpers.mail import Mail, Email, To, Content, HtmlContent
+ 
+    api_key      = os.getenv("SENDGRID_API_KEY")
+    from_email   = os.getenv("DEFAULT_FROM_EMAIL", "noreply@secretdrop.io")
+    app_name     = os.getenv("APP_NAME", "SecretDrop")
+ 
+    if not api_key:
+        logger.error("[password_reset] SENDGRID_API_KEY tidak ditemukan di environment.")
+        return False
+ 
+    html_content = f"""
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Reset Password</title>
+</head>
+<body style="margin:0;padding:0;background:#f5f5f5;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f5f5f5;padding:40px 20px;">
+    <tr>
+      <td align="center">
+        <table width="520" cellpadding="0" cellspacing="0"
+          style="background:#ffffff;border-radius:12px;overflow:hidden;
+                 box-shadow:0 2px 12px rgba(0,0,0,.08);">
+ 
+          <!-- Header -->
+          <tr>
+            <td style="background:#0f172a;padding:28px 36px;">
+              <p style="margin:0;color:#ffffff;font-size:18px;font-weight:600;
+                         letter-spacing:-0.3px;">
+                🔐 {app_name}
+              </p>
+            </td>
+          </tr>
+ 
+          <!-- Body -->
+          <tr>
+            <td style="padding:36px;">
+              <h1 style="margin:0 0 12px;font-size:22px;font-weight:700;
+                          color:#0f172a;letter-spacing:-0.5px;">
+                Reset password kamu
+              </h1>
+              <p style="margin:0 0 24px;font-size:15px;color:#475569;line-height:1.6;">
+                Kami menerima permintaan untuk mereset password akun kamu.
+                Klik tombol di bawah untuk membuat password baru.
+              </p>
+ 
+              <!-- CTA Button -->
+              <table cellpadding="0" cellspacing="0" style="margin-bottom:24px;">
+                <tr>
+                  <td style="background:#0f172a;border-radius:8px;">
+                    <a href="{reset_url}"
+                       style="display:inline-block;padding:13px 28px;
+                              color:#ffffff;font-size:14px;font-weight:600;
+                              text-decoration:none;letter-spacing:0.1px;">
+                      Reset Password →
+                    </a>
+                  </td>
+                </tr>
+              </table>
+ 
+              <!-- Warning -->
+              <div style="background:#fef9c3;border:1px solid #fde047;
+                          border-radius:8px;padding:14px 16px;margin-bottom:24px;">
+                <p style="margin:0;font-size:13px;color:#854d0e;">
+                  ⏱ Link ini hanya berlaku selama <strong>1 jam</strong>.
+                  Setelah itu kamu perlu request ulang.
+                </p>
+              </div>
+ 
+              <!-- URL fallback -->
+              <p style="margin:0 0 6px;font-size:13px;color:#94a3b8;">
+                Jika tombol tidak bekerja, copy link ini ke browser:
+              </p>
+              <p style="margin:0;font-size:12px;color:#64748b;
+                         word-break:break-all;
+                         background:#f8fafc;padding:10px 12px;
+                         border-radius:6px;border:1px solid #e2e8f0;">
+                {reset_url}
+              </p>
+            </td>
+          </tr>
+ 
+          <!-- Footer -->
+          <tr>
+            <td style="padding:20px 36px;border-top:1px solid #f1f5f9;">
+              <p style="margin:0;font-size:12px;color:#94a3b8;line-height:1.6;">
+                Jika kamu tidak merasa request ini, abaikan email ini —
+                password kamu tidak akan berubah.<br>
+                © {app_name} · Email ini dikirim otomatis, jangan dibalas.
+              </p>
+            </td>
+          </tr>
+ 
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>
+"""
+ 
+    try:
+        message = Mail(
+            from_email = Email(from_email, app_name),
+            to_emails  = To(to_email),
+            subject    = f"Reset password {app_name}",
+        )
+        message.content = [HtmlContent(html_content)]
+ 
+        sg     = SendGridAPIClient(api_key)
+        res    = sg.send(message)
+        status_code = res.status_code
+ 
+        if status_code in (200, 202):
+            logger.info(f"[password_reset] Email terkirim ke {to_email} (status {status_code})")
+            return True
+        else:
+            logger.error(f"[password_reset] SendGrid error: status {status_code}")
+            return False
+ 
+    except Exception as e:
+        logger.error(f"[password_reset] Gagal kirim email: {e}", exc_info=True)
+        return False
+ 
 
+
+class ForgotPasswordView(APIView):
+    """
+    POST /api/auth/forgot-password/
+    Body: { "email": "user@example.com" }
+ 
+    Selalu return 200 meski email tidak terdaftar —
+    ini mencegah email enumeration attack.
+    """
+    permission_classes = [AllowAny]
+    throttle_scope     = "forgot_password"
+ 
+    def post(self, request):
+        import os
+        email = request.data.get("email", "").strip().lower()
+ 
+        if not email:
+            return Response(
+                {"success": False, "message": "Email wajib diisi."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+ 
+        # Respons generik — tidak bocorkan apakah email terdaftar atau tidak
+        generic_response = Response({
+            "success": True,
+            "message": (
+                "Jika email ini terdaftar, kamu akan menerima "
+                "link reset password dalam beberapa menit."
+            ),
+        })
+ 
+        # Cari user
+        from .models import User
+        try:
+            user = User.objects.get(email=email, is_active=True)
+        except User.DoesNotExist:
+            # Tetap return 200 — jangan bocorkan info
+            logger.info(f"[password_reset] Email tidak ditemukan: {email}")
+            return generic_response
+ 
+        if user.is_banned:
+            logger.warning(f"[password_reset] User banned coba reset: {email}")
+            return generic_response
+ 
+        # Cek rate limit — maks 3 request per 10 menit per email
+        rate_key   = f"pwd_reset_rate:{email}"
+        rate_count = cache.get(rate_key, 0)
+        if rate_count >= 3:
+            logger.warning(f"[password_reset] Rate limit hit: {email}")
+            return generic_response
+ 
+        # Generate token aman (32 bytes = 256-bit entropy)
+        token    = secrets.token_urlsafe(32)
+        cache_key = _make_cache_key(token)
+ 
+        # Simpan ke cache: { user_id, email } — expire 1 jam
+        cache.set(cache_key, {
+            "user_id": str(user.id),
+            "email":   user.email,
+        }, timeout=RESET_TOKEN_TTL)
+ 
+        # Increment rate limit counter
+        cache.set(rate_key, rate_count + 1, timeout=60 * 10)
+ 
+        # Build reset URL untuk FE
+        frontend_url = os.getenv("FRONTEND_URL", "http://localhost:3000")
+        reset_url    = f"{frontend_url}/reset-password?token={token}"
+ 
+        # Kirim email
+        sent = _send_reset_email(user.email, reset_url)
+        if not sent:
+            # Hapus token dari cache kalau email gagal
+            cache.delete(cache_key)
+            logger.error(f"[password_reset] Gagal kirim email ke {email}")
+            return Response(
+                {"success": False, "message": "Gagal mengirim email. Coba lagi nanti."},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+ 
+        return generic_response
+ 
+ 
+# ===========================================================================
+# VIEW 2 — Validasi token (GET, untuk FE cek sebelum render form)
+# ===========================================================================
+ 
+class ValidateResetTokenView(APIView):
+    """
+    GET /api/auth/reset-password/validate/?token=xxx
+ 
+    FE pakai ini saat halaman reset-password di-load —
+    kalau token tidak valid, langsung redirect ke halaman expired.
+    """
+    permission_classes = [AllowAny]
+ 
+    def get(self, request):
+        token = request.query_params.get("token", "").strip()
+ 
+        if not token:
+            return Response(
+                {"valid": False, "message": "Token tidak ditemukan."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+ 
+        cache_key = _make_cache_key(token)
+        data      = cache.get(cache_key)
+ 
+        if not data:
+            return Response(
+                {"valid": False, "message": "Link reset sudah kedaluwarsa atau tidak valid."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+ 
+        return Response({
+            "valid": True,
+            "email": data["email"],
+        })
+ 
+ 
+# ===========================================================================
+# VIEW 3 — Konfirmasi reset (set password baru)
+# ===========================================================================
+ 
+class ResetPasswordConfirmView(APIView):
+    """
+    POST /api/auth/reset-password/confirm/
+    Body: {
+      "token": "xxx",
+      "password": "newpassword123",
+      "password_confirm": "newpassword123"
+    }
+    """
+    permission_classes = [AllowAny]
+ 
+    def post(self, request):
+        token            = request.data.get("token", "").strip()
+        password         = request.data.get("password", "")
+        password_confirm = request.data.get("password_confirm", "")
+ 
+        # Validasi input
+        if not token:
+            return Response(
+                {"success": False, "message": "Token tidak ditemukan."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if not password:
+            return Response(
+                {"success": False, "message": "Password baru wajib diisi."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if len(password) < 8:
+            return Response(
+                {"success": False, "message": "Password minimal 8 karakter."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if password != password_confirm:
+            return Response(
+                {"success": False, "message": "Password dan konfirmasi tidak cocok."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+ 
+        # Validasi token
+        cache_key = _make_cache_key(token)
+        data      = cache.get(cache_key)
+ 
+        if not data:
+            return Response(
+                {
+                    "success": False,
+                    "message": "Link reset sudah kedaluwarsa atau tidak valid. "
+                               "Silakan request ulang.",
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+ 
+        # Cari user
+        from .models import User
+        try:
+            user = User.objects.get(id=data["user_id"], is_active=True)
+        except User.DoesNotExist:
+            cache.delete(cache_key)
+            return Response(
+                {"success": False, "message": "User tidak ditemukan."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+ 
+        # Set password baru
+        user.set_password(password)
+        user.save(update_fields=["password"])
+ 
+        # Hapus token — one-time use
+        cache.delete(cache_key)
+ 
+        # Hapus juga rate limit counter
+        cache.delete(f"pwd_reset_rate:{user.email}")
+ 
+        logger.info(f"[password_reset] Password berhasil direset: {user.email}")
+ 
+        return Response({
+            "success": True,
+            "message": "Password berhasil diubah. Silakan login dengan password baru.",
+        })
 
 class ProfileView(APIView):
     """

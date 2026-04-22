@@ -170,7 +170,11 @@ CORS_ALLOWED_ORIGINS = [
     "https://yourdomain.com",       # production frontend
 ]
 CORS_ALLOW_CREDENTIALS = True
- 
+# Izinkan custom header untuk fingerprint anon user
+from corsheaders.defaults import default_headers
+CORS_ALLOW_HEADERS = list(default_headers) + [
+    'x-fingerprint-hash',
+]
 
  
 # ── File Upload ───────────────────────────────────────────────────────────────
