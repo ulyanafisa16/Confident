@@ -229,6 +229,16 @@ body {
   min-height: 100vh;
 }
 
+  .page-wrapper {
+  display: flex;
+  flex-direction: column;
+  flex: 1;                    /* ← mengisi sisa tinggi .main */
+}
+
+.page-wrapper .content {
+  flex: 1;  
+}
+
 /* ═══════════════════════════════════════════
    TOPBAR
 ═══════════════════════════════════════════ */
