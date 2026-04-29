@@ -66,14 +66,27 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 /* ── CONFIRM ACTION ── */
-async function confirmAction(url, message, successMsg) {
-  if (!confirm(message)) return;
+async function confirmAction(url, message, successMsg, type = 'default') {
+  const result = await Swal.fire({
+    title: message,
+    icon: type === 'danger' ? 'warning' : 'question',
+    showCancelButton: true,
+    confirmButtonText: 'Ya',
+    cancelButtonText: 'Batal',
+    background: '#16161d',
+    color: '#fff',
+    confirmButtonColor: type === 'danger' ? '#ef4444' : '#22c55e',
+  });
+
+  if (!result.isConfirmed) return;
+
   try {
     const res  = await fetch(url, {
       method: 'POST',
       headers: { 'X-CSRFToken': CSRF(), 'Content-Type': 'application/json' }
     });
     const data = await res.json();
+
     if (data.ok) {
       flash(successMsg || data.message, 'success');
       setTimeout(() => location.reload(), 900);

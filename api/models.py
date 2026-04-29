@@ -710,3 +710,81 @@ class RateLimitConfig(models.Model):
             }
         )
         return obj
+    
+
+# ---------------------------------------------------------------------------
+# 9. DETECTION CONFIG
+# ---------------------------------------------------------------------------
+
+class DetectionConfig(models.Model):
+    """
+    Konfigurasi AI Detection Engine — bisa diubah dari dashboard
+    tanpa edit kode atau restart server.
+ 
+    Singleton: hanya satu row aktif (is_active=True).
+    Perubahan efektif dalam maks 5 menit (cache TTL).
+    """
+ 
+    # ── Score threshold ───────────────────────────────────────────────────────
+    score_flag  = models.PositiveSmallIntegerField(
+        default=40,
+        validators=[MinValueValidator(1), MaxValueValidator(99)],
+        help_text="Score ≥ ini → FLAGGED (review admin). Default: 40"
+    )
+    score_block = models.PositiveSmallIntegerField(
+        default=70,
+        validators=[MinValueValidator(1), MaxValueValidator(100)],
+        help_text="Score ≥ ini → BLOCKED otomatis. Default: 70"
+    )
+ 
+    # ── Rate abuse threshold ──────────────────────────────────────────────────
+    rate_burst_1min  = models.PositiveSmallIntegerField(default=5,  help_text="Maks request/menit per IP (anon)")
+    rate_burst_10min = models.PositiveSmallIntegerField(default=10, help_text="Maks request/10 menit per IP (anon)")
+    rate_burst_1hour = models.PositiveSmallIntegerField(default=30, help_text="Maks request/jam per IP (anon)")
+ 
+    # ── Individual rule switches ──────────────────────────────────────────────
+    rule_blocked_mime        = models.BooleanField(default=True, help_text="Blokir MIME/ekstensi berbahaya")
+    rule_iv_reuse            = models.BooleanField(default=True, help_text="Deteksi IV nonce dipakai ulang")
+    rule_rate_abuse          = models.BooleanField(default=True, help_text="Rate abuse per IP")
+    rule_suspicious_filename = models.BooleanField(default=True, help_text="Nama file mencurigakan")
+    rule_entropy_anomaly     = models.BooleanField(default=True, help_text="Entropy ciphertext rendah")
+    rule_payload_size        = models.BooleanField(default=True, help_text="Ukuran payload tidak konsisten")
+    rule_suspicious_config   = models.BooleanField(default=True, help_text="Konfigurasi secret tidak wajar")
+    rule_file_size_anomaly   = models.BooleanField(default=True, help_text="Ukuran file anomali")
+    rule_suspicious_ua       = models.BooleanField(default=True, help_text="User-agent bot/automation")
+    rule_client_amplifier    = models.BooleanField(default=True, help_text="Amplifikasi score dari browser")
+ 
+    # ── Combination rule switches ─────────────────────────────────────────────
+    rule_combo_anon_abuse   = models.BooleanField(default=True, help_text="Combo: anon + banyak penerima + tanpa proteksi")
+    rule_combo_malware_dist = models.BooleanField(default=True, help_text="Combo: file besar + anon + bot UA")
+    rule_combo_rapid_create = models.BooleanField(default=True, help_text="Combo: buat secret identik berulang dari IP sama")
+ 
+    # ── Metadata ──────────────────────────────────────────────────────────────
+    version    = models.PositiveIntegerField(default=1, help_text="Auto-increment saat disimpan. Dipakai sebagai cache key version.")
+    is_active  = models.BooleanField(default=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    updated_by = models.ForeignKey(
+        'User', on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name='detection_configs_updated',
+    )
+ 
+    class Meta:
+        db_table     = "detection_config"
+        verbose_name = "Detection Config"
+ 
+    def __str__(self):
+        return f"DetectionConfig v{self.version} (flag≥{self.score_flag}, block≥{self.score_block})"
+ 
+    def save(self, *args, **kwargs):
+        if self.pk:
+            self.version += 1
+        super().save(*args, **kwargs)
+ 
+    @classmethod
+    def get(cls):
+        obj, _ = cls.objects.get_or_create(
+            is_active=True,
+            defaults={'score_flag': 40, 'score_block': 70}
+        )
+        return obj
