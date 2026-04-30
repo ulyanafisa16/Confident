@@ -750,18 +750,17 @@ class SecretCreateView(APIView):
     
         # Update log server-side dengan relasi ke secret yang baru tersimpan
         from .models import AIDetectionLog
-        AIDetectionLog.objects.filter(
-            secret__isnull=True,
-            ip_address=get_client_ip(request),
+        recent_log = AIDetectionLog.objects.filter(
+            source          = AIDetectionLog.DetectionSource.SERVER,
+            secret__isnull  = True,
+            ip_address      = get_client_ip(request),
+            created_at__gte = secret.created_at - timezone.timedelta(seconds=10),
         ).order_by("-created_at").first()
-        # (log sudah dibuat di dalam run_server_detection dengan secret=None,
-        #  update relasi secret di sini)
-        AIDetectionLog.objects.filter(
-            source=AIDetectionLog.DetectionSource.SERVER,
-            secret__isnull=True,
-            ip_address=get_client_ip(request),
-        ).order_by("-created_at").update(secret=secret)
-    
+
+        if recent_log:
+            recent_log.secret = secret
+            recent_log.save(update_fields=["secret"])
+            
         # ── Bangun response ───────────────────────────────────────────────────
         response_data = {
             "secret_id":    str(secret.id),

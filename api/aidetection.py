@@ -756,6 +756,7 @@ class MetadataAIDetector:
                 ip_address      = ip_address or payload.ip_address or None,
                 file_size_bytes = payload.file_size_bytes,
                 secret_type     = payload.secret_type,
+                reviewed_at     = timezone.now() if result.action == "allowed" else None,
             )
         except Exception as e:
             logger.error(f"[detector] Gagal simpan AIDetectionLog: {e}", exc_info=True)

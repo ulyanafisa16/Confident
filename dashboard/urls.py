@@ -1,3 +1,4 @@
+from django import views
 from django.urls import path
 from django.contrib.auth import views as auth_views
 from .views import (
@@ -8,7 +9,7 @@ from .views import (
     ai_logs_list, ai_log_detail_api, ai_log_approve, ai_log_block, ai_logs_bulk,
     access_logs_list,
     rate_limits, rate_limit_update,
-    anon_sessions,
+    anon_sessions, detection_config,
 )
 
 app_name = 'admin_panel'
@@ -51,6 +52,9 @@ urlpatterns = [
 
     # Anon Sessions
     path('anon-sessions/',      anon_sessions,     name='anon_sessions'),
+
+    #DETECTION CONFIG
+    path("detection-config/", detection_config, name="detection_config"),
 
     # LOGIN
     path('login/', auth_views.LoginView.as_view(

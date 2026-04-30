@@ -19,6 +19,14 @@ from api.models import (
 )
 
 
+def get_sidebar_counts():
+    """Hitung badge counter untuk sidebar."""
+    from api.models import AIDetectionLog, Secret
+    return {
+        "pending_secrets_count": Secret.objects.filter(ai_flagged=True).count(),
+        "pending_ai_count": AIDetectionLog.objects.filter(reviewed_at__isnull=True).count(),
+    }
+
 class CustomLoginView(LoginView):
     template_name = 'login.html'
     
@@ -506,3 +514,78 @@ def anon_sessions(request):
         )
     ctx = {'page_obj': paginate(qs, request), **admin_context(request)}
     return render(request, 'admin_panel/anon_sessions.html', ctx)
+
+# ─────────────────────────────────────────────
+# DETECTION CONFIG 
+# ─────────────────────────────────────────────
+@admin_required
+def detection_config(request):
+    """
+    GET  /dashboard/detection-config/ — tampilkan form
+    POST /dashboard/detection-config/ — simpan perubahan
+    """
+    from api.models import DetectionConfig
+ 
+    config = DetectionConfig.get()
+ 
+    # Data untuk template — label dan deskripsi tiap rule
+    individual_rules = [
+        ("rule_blocked_mime",        "Blokir MIME/Ekstensi",    "Blokir file .exe, .bat, .sh, dll"),
+        ("rule_iv_reuse",            "IV Nonce Reuse",          "Deteksi IV yang dipakai ulang (replay attack)"),
+        ("rule_rate_abuse",          "Rate Abuse",              "Terlalu banyak request dari satu IP dalam waktu singkat"),
+        ("rule_suspicious_filename", "Nama File Mencurigakan",  "Double extension, nama mirip system file"),
+        ("rule_entropy_anomaly",     "Entropy Ciphertext",      "Entropy terlalu rendah — kemungkinan tidak terenkripsi dengan benar"),
+        ("rule_payload_size",        "Ukuran Payload",          "Ukuran ciphertext tidak konsisten dengan klaim file_size_bytes"),
+        ("rule_suspicious_config",   "Konfigurasi Secret",      "Anon user tanpa expiry, banyak penerima tanpa proteksi"),
+        ("rule_file_size_anomaly",   "Ukuran File Anomali",     "File terlalu kecil atau mendekati batas upload"),
+        ("rule_suspicious_ua",       "User-Agent Bot",          "Request dari curl, python-requests, atau tool automation"),
+        ("rule_client_amplifier",    "Amplifikasi Client Score","Tambahkan sebagian score dari hasil scan browser"),
+    ]
+ 
+    combo_rules = [
+        ("rule_combo_anon_abuse",   "Anon Abuse Pattern",       "Anon + banyak penerima + tanpa password + tanpa expiry wajar"),
+        ("rule_combo_malware_dist", "Malware Distribution",     "File besar + anon user + bot UA + tanpa password"),
+        ("rule_combo_rapid_create", "Rapid Create Pattern",     "Secret identik dibuat berulang cepat dari IP yang sama"),
+    ]
+ 
+    if request.method == "POST":
+        try:
+            # Threshold
+            score_flag  = int(request.POST.get("score_flag",  40))
+            score_block = int(request.POST.get("score_block", 70))
+ 
+            if score_flag >= score_block:
+                messages.error(request, "Score FLAG harus lebih kecil dari score BLOCK.")
+                return redirect("admin_panel:detection_config")
+ 
+            config.score_flag  = score_flag
+            config.score_block = score_block
+ 
+            # Rate threshold
+            config.rate_burst_1min  = int(request.POST.get("rate_burst_1min",  5))
+            config.rate_burst_10min = int(request.POST.get("rate_burst_10min", 10))
+            config.rate_burst_1hour = int(request.POST.get("rate_burst_1hour", 30))
+ 
+            # Rule switches — checkbox: ada di POST = True, tidak ada = False
+            all_rule_fields = [r[0] for r in individual_rules + combo_rules]
+            for field_name in all_rule_fields:
+                setattr(config, field_name, field_name in request.POST)
+ 
+            config.updated_by = request.user
+            config.save()  # auto-increment version di model.save()
+ 
+            messages.success(request, f"Konfigurasi AI Detection v{config.version} berhasil disimpan.")
+ 
+        except (ValueError, TypeError) as e:
+            messages.error(request, f"Nilai tidak valid: {e}")
+ 
+        return redirect("admin_panel:detection_config")
+ 
+    return render(request, "admin_panel/detection_config.html", {
+        "config":           config,
+        "individual_rules": individual_rules,
+        "combo_rules":      combo_rules,
+        **get_sidebar_counts(),
+    })
+ 
+ 

@@ -5,7 +5,7 @@ from django.utils.html import format_html
 from django.db.models import Count
 
 from .models import (
-    DomainWhitelist, User, AnonymousSession, Secret, SecretLink,
+    DetectionConfig, DomainWhitelist, User, AnonymousSession, Secret, SecretLink,
     EmailWhitelist, AccessLog, AIDetectionLog, RateLimitConfig,
 )
 
@@ -405,3 +405,11 @@ class RateLimitConfigAdmin(admin.ModelAdmin):
             "fields": ("created_at", "updated_at"),
         }),
     )
+
+# ---------------------------------------------------------------------------
+# 10. DETECTION CONFIG ADMIN
+# ---------------------------------------------------------------------------
+
+@admin.register(DetectionConfig)
+class DetectionConfigAdmin(admin.ModelAdmin):
+    list_display = ('id',)

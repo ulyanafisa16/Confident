@@ -1,0 +1,218 @@
+{% extends "admin_panel/base.html" %}
+{% load admin_extras %}
+{% block title %}AI Detection Config{% endblock %}
+{% block page_title %}AI Detection Config{% endblock %}
+{% block nav_detection %}active{% endblock %}
+
+{% block content %}
+
+{# ── Info banner ── #}
+<div style="
+  display:flex; align-items:flex-start; gap:10px;
+  padding:12px 16px; border-radius:8px; margin-bottom:20px;
+  background:rgba(124,106,247,.08); border:1px solid rgba(124,106,247,.2);
+  font-size:13px; color:#9492a8; line-height:1.6;
+">
+  <svg width="16" height="16" fill="none" viewBox="0 0 16 16" style="flex-shrink:0;margin-top:1px;color:#7c6af7">
+    <circle cx="8" cy="8" r="6" stroke="currentColor" stroke-width="1.5"/>
+    <path d="M8 7v4M8 5.5v.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+  </svg>
+  <div>
+    Perubahan konfigurasi efektif dalam <strong style="color:#f0eff5">maks 5 menit</strong>
+    (setelah cache expire). Tidak perlu restart server.
+    Config saat ini: <strong style="color:#f0eff5">v{{ config.version }}</strong>,
+    terakhir diubah <strong style="color:#f0eff5">{{ config.updated_at|date:"d M Y H:i" }}</strong>
+    {% if config.updated_by %}oleh <strong style="color:#f0eff5">{{ config.updated_by.email }}</strong>{% endif %}.
+  </div>
+</div>
+
+<form method="post">
+  {% csrf_token %}
+
+  <div style="display:grid; grid-template-columns:1fr 1fr; gap:16px;">
+
+    {# ── KIRI: Score threshold + Rate threshold ── #}
+    <div style="display:flex; flex-direction:column; gap:16px;">
+
+      {# Score threshold #}
+      <div class="table-card">
+        <div class="table-header">
+          <div>
+            <div class="table-title">Score Threshold</div>
+            <div class="table-sub">Tentukan batas score untuk setiap aksi</div>
+          </div>
+        </div>
+        <div style="padding:20px; display:flex; flex-direction:column; gap:16px;">
+
+          <div class="form-group">
+            <label class="form-label">
+              Score FLAG (review admin)
+              <span style="color:#5c5a70; font-weight:400"> — default: 40</span>
+            </label>
+            <input type="number" name="score_flag" class="form-input"
+              value="{{ config.score_flag }}" min="1" max="99" required>
+            <span style="font-size:11px; color:#5c5a70">
+              Score ≥ nilai ini → masuk antrian review admin (flagged)
+            </span>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">
+              Score BLOCK (otomatis)
+              <span style="color:#5c5a70; font-weight:400"> — default: 70</span>
+            </label>
+            <input type="number" name="score_block" class="form-input"
+              value="{{ config.score_block }}" min="1" max="100" required>
+            <span style="font-size:11px; color:#5c5a70">
+              Score ≥ nilai ini → diblokir otomatis, tidak disimpan ke DB
+            </span>
+          </div>
+
+          {# Visual threshold bar #}
+          <div style="margin-top:4px;">
+            <div style="display:flex; justify-content:space-between; font-size:11px; color:#5c5a70; margin-bottom:6px;">
+              <span>0</span>
+              <span style="color:#34d399">Allowed</span>
+              <span style="color:#fbbf24">Flagged</span>
+              <span style="color:#f87171">Blocked</span>
+              <span>100</span>
+            </div>
+            <div style="height:6px; background:var(--bg-elevated); border-radius:3px; overflow:hidden; position:relative;">
+              <div style="
+                position:absolute; left:0; top:0; bottom:0;
+                width:{{ config.score_flag }}%;
+                background: linear-gradient(90deg, #34d399, #34d399);
+                border-radius:3px 0 0 3px;
+              "></div>
+              <div style="
+                position:absolute; top:0; bottom:0;
+                left:{{ config.score_flag }}%;
+                width:{{ config.score_block|add:'-'|add:config.score_flag|default:'30' }}%;
+                background: #fbbf24;
+              "></div>
+              <div style="
+                position:absolute; top:0; bottom:0; right:0;
+                left:{{ config.score_block }}%;
+                background: #f87171;
+                border-radius:0 3px 3px 0;
+              "></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {# Rate threshold #}
+      <div class="table-card">
+        <div class="table-header">
+          <div>
+            <div class="table-title">Rate Abuse Threshold</div>
+            <div class="table-sub">Maks request per window waktu per IP (anon user)</div>
+          </div>
+        </div>
+        <div style="padding:20px; display:flex; flex-direction:column; gap:14px;">
+
+          <div class="form-group">
+            <label class="form-label">Maks request / 1 menit <span style="color:#5c5a70; font-weight:400">(default: 5)</span></label>
+            <input type="number" name="rate_burst_1min" class="form-input"
+              value="{{ config.rate_burst_1min }}" min="1" max="100" required>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Maks request / 10 menit <span style="color:#5c5a70; font-weight:400">(default: 10)</span></label>
+            <input type="number" name="rate_burst_10min" class="form-input"
+              value="{{ config.rate_burst_10min }}" min="1" max="200" required>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Maks request / 1 jam <span style="color:#5c5a70; font-weight:400">(default: 30)</span></label>
+            <input type="number" name="rate_burst_1hour" class="form-input"
+              value="{{ config.rate_burst_1hour }}" min="1" max="500" required>
+          </div>
+
+        </div>
+      </div>
+
+    </div>{# /kiri #}
+
+    {# ── KANAN: Rule switches ── #}
+    <div style="display:flex; flex-direction:column; gap:16px;">
+
+      {# Individual rules #}
+      <div class="table-card">
+        <div class="table-header">
+          <div>
+            <div class="table-title">Individual Rules</div>
+            <div class="table-sub">Aktifkan atau nonaktifkan rule secara individual</div>
+          </div>
+        </div>
+        <div style="padding:8px 0;">
+          {% for rule_name, label, description in individual_rules %}
+          <div style="
+            display:flex; align-items:flex-start; gap:12px;
+            padding:12px 20px; border-bottom:1px solid var(--border);
+          ">
+            <label style="display:flex; align-items:center; cursor:pointer; gap:10px; flex:1;">
+              <div style="position:relative; flex-shrink:0;">
+                <input type="checkbox" name="{{ rule_name }}"
+                  {% if config|get_attr:rule_name %}checked{% endif %}
+                  style="width:16px;height:16px;accent-color:var(--accent);cursor:pointer;">
+              </div>
+              <div>
+                <div style="font-size:13px; font-weight:500; color:var(--text-1);">{{ label }}</div>
+                <div style="font-size:11.5px; color:var(--text-3); margin-top:2px;">{{ description }}</div>
+              </div>
+            </label>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+
+      {# Combination rules #}
+      <div class="table-card">
+        <div class="table-header">
+          <div>
+            <div class="table-title">Combination Rules</div>
+            <div class="table-sub">
+              Trigger hanya kalau beberapa kondisi terpenuhi sekaligus.
+              Hanya score tertinggi dari grup ini yang dihitung (tidak stack).
+            </div>
+          </div>
+        </div>
+        <div style="padding:8px 0;">
+          {% for rule_name, label, description in combo_rules %}
+          <div style="
+            display:flex; align-items:flex-start; gap:12px;
+            padding:12px 20px; border-bottom:1px solid var(--border);
+          ">
+            <label style="display:flex; align-items:center; cursor:pointer; gap:10px; flex:1;">
+              <input type="checkbox" name="{{ rule_name }}"
+                {% if config|get_attr:rule_name %}checked{% endif %}
+                style="width:16px;height:16px;accent-color:var(--accent);cursor:pointer;">
+              <div>
+                <div style="font-size:13px; font-weight:500; color:var(--text-1);">{{ label }}</div>
+                <div style="font-size:11.5px; color:var(--text-3); margin-top:2px;">{{ description }}</div>
+              </div>
+            </label>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+
+    </div>{# /kanan #}
+
+  </div>{# /grid #}
+
+  {# Save button #}
+  <div style="display:flex; justify-content:flex-end; gap:10px; margin-top:20px;">
+    <a href="{% url 'admin_panel:dashboard' %}" class="btn btn-ghost">Batal</a>
+    <button type="submit" class="btn btn-primary">
+      <svg width="14" height="14" fill="none" viewBox="0 0 16 16">
+        <path d="M3 8l4 4 6-6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+      Simpan Konfigurasi
+    </button>
+  </div>
+
+</form>
+
+{% endblock %}
