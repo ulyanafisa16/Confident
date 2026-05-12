@@ -30,8 +30,14 @@ SENDGRID_API_KEY = os.getenv("SENDGRID_API_KEY")
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = ['127.0.0.1', 'localhost', '192.168.21.63']
+ALLOWED_HOSTS = ['127.0.0.1', 'localhost', '192.168.21.63', 'onetimeunlock.local']
 
+CSRF_TRUSTED_ORIGINS = [
+    "http://127.0.0.1:8000",
+    "https://onetimeunlock.local",
+    "http://localhost:3000",
+    
+]
 
 # Application definition
 
@@ -166,9 +172,10 @@ SIMPLE_JWT = {
 }
  
 # ── CORS (untuk Next.js frontend) ────────────────────────────────────────────
+CORS_ALLOW_ALL_ORIGINS = False
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:3000",        # Next.js dev
-    "https://yourdomain.com",       # production frontend
+    "https://onetimeunlock.local",       # production frontend
 ]
 CORS_ALLOW_CREDENTIALS = True
 # Izinkan custom header untuk fingerprint anon user
@@ -177,6 +184,23 @@ CORS_ALLOW_HEADERS = list(default_headers) + [
     'x-fingerprint-hash',
 ]
 
+# Security Headers
+SECURE_CONTENT_TYPE_NOSNIFF = True
+X_FRAME_OPTIONS = "DENY"
+
+# Cookie security
+SESSION_COOKIE_HTTPONLY = True
+CSRF_COOKIE_HTTPONLY = True
+SESSION_COOKIE_SECURE = False
+CSRF_COOKIE_SECURE = False
+
+# HTTPS production
+SECURE_SSL_REDIRECT = False
+
+# HSTS — aktifkan kalau HTTPS sudah stabil
+SECURE_HSTS_SECONDS = 0
+SECURE_HSTS_INCLUDE_SUBDOMAINS = False
+SECURE_HSTS_PRELOAD = False
  
 # ── File Upload ───────────────────────────────────────────────────────────────
 # Maks file upload 100 MB (limit server-side — validasi per-user ada di serializer)

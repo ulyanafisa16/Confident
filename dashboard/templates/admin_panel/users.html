@@ -81,17 +81,25 @@
               onclick="loadDetail('{% url "admin_panel:user_detail_api" user.id %}','modal-user-detail')">
               Detail
             </button>
-            {% if user.is_banned %}
-            <button class="btn btn-ghost btn-sm"
-              onclick="confirmAction('{% url "admin_panel:user_unban" user.id %}','Unban user ini?','User di-unban.')">
-              Unban
-            </button>
+
+            {# Sembunyikan Ban/Unban untuk admin dan diri sendiri #}
+            {% if not user.is_admin and user.id != request.user.id %}
+              {% if user.is_banned %}
+                <button class="btn btn-ghost btn-sm"
+                  onclick="confirmAction('{% url "admin_panel:user_unban" user.id %}','Unban user ini?','User di-unban.')">
+                  Unban
+                </button>
+              {% else %}
+                <button class="btn btn-red btn-sm"
+                  onclick="confirmAction('{% url "admin_panel:user_ban" user.id %}','Ban user {{ user.email }}?','User dibanned.')">
+                  Ban
+                </button>
+              {% endif %}
             {% else %}
-            <button class="btn btn-red btn-sm"
-              onclick="confirmAction('{% url "admin_panel:user_ban" user.id %}','Ban user {{ user.email }}?','User dibanned.')">
-              Ban
-            </button>
+              {# Tampilkan dash untuk admin dan diri sendiri #}
+              <span style="font-size:12px; color:var(--text-3); padding: 5px 10px;">—</span>
             {% endif %}
+
           </div>
         </td>
       </tr>

@@ -34,6 +34,8 @@ from .views import (
     ForgotPasswordView,
     ValidateResetTokenView,
     ResetPasswordConfirmView,
+    LogoutView,
+    ChangePasswordView,
 )
 
 # ---------------------------------------------------------------------------
@@ -54,6 +56,8 @@ urlpatterns = [
     path("auth/refresh/",   TokenRefreshView.as_view(),   name="auth-refresh"),
     path("auth/me/",        ProfileView.as_view(),         name="auth-profile"),
 
+    path("auth/logout/",    LogoutView.as_view(),         name="auth-logout"),
+    path("auth/change-password/", ChangePasswordView.as_view(), name="auth-change-password"),
     # ── Secret (core) ─────────────────────────────────────────────────────
     # POST   /api/secrets/             — buat secret baru (anon/user)
     # GET    /api/secrets/my/          — list secret milik user login

@@ -292,8 +292,8 @@ class SecretCreateSerializer(serializers.Serializer):
     max_views         = serializers.IntegerField(
         default=1, min_value=1, max_value=100
     )
-    expires_in_hours  = serializers.IntegerField(
-        required=False, allow_null=True, min_value=1,
+    expires_in_hours  = serializers.FloatField(
+        required=False, allow_null=True, min_value=0.0833,
         help_text="Berapa jam sampai secret expired. Null = tidak ada expiry (hanya user login)."
     )
     num_recipients    = serializers.IntegerField(
@@ -440,6 +440,10 @@ class SecretCreateSerializer(serializers.Serializer):
                         f"Maks {config.max_expiry_days} hari "
                         f"({max_hours} jam) untuk akun Anda."
                     )
+                })
+            if expires_in_hours < 0.0833:
+                raise serializers.ValidationError({
+                    "expires_in_hours": "Waktu kedaluwarsa minimal 5 menit."
                 })
 
         # -- Recipient check --

@@ -1461,3 +1461,70 @@ class AdminAccessLogsView(APIView):
             "per_page": per_page,
             "logs":     AccessLogSerializer(logs, many=True).data,
         })
+
+class LogoutView(APIView):
+    """
+    POST /api/auth/logout/
+    Blacklist refresh token + hapus session Django.
+    """
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        # Blacklist refresh token kalau pakai simplejwt
+        try:
+            refresh_token = request.data.get("refresh_token")
+            if refresh_token:
+                from rest_framework_simplejwt.tokens import RefreshToken as RT
+                token = RT(refresh_token)
+                token.blacklist()
+        except Exception:
+            pass  # Token sudah expired atau tidak valid — tidak masalah
+
+        # Hapus Django session
+        request.session.flush()
+
+        # Clear session cookie via response
+        response = Response({
+            "success": True,
+            "message": "Logout berhasil."
+        })
+        response.delete_cookie("sessionid")
+        response.delete_cookie("csrftoken")
+
+        return response
+
+class ChangePasswordView(APIView):
+    """
+    POST /api/auth/change-password/
+    Body: { "old_password": "...", "new_password": "..." }
+    """
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        old_password = request.data.get("old_password", "")
+        new_password = request.data.get("new_password", "")
+
+        if not old_password or not new_password:
+            return error_response(message="Semua field wajib diisi.")
+
+        if len(new_password) < 8:
+            return error_response(message="Password baru minimal 8 karakter.")
+
+        # Cek password lama
+        if not request.user.check_password(old_password):
+            return error_response(
+                message="Password lama tidak sesuai.",
+                status_code=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if old_password == new_password:
+            return error_response(
+                message="Password baru harus berbeda dari password lama.",
+                status_code=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Update password
+        request.user.set_password(new_password)
+        request.user.save(update_fields=["password"])
+
+        return success_response(message="Password berhasil diubah. Silakan login ulang.")
