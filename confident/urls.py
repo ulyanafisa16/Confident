@@ -19,9 +19,9 @@ from django.contrib import admin
 from django.urls import path, include
 
 urlpatterns = [
-    path('', lambda request: redirect('/dashboard/')),
+    path('', lambda request: redirect('/admin-panel/')),
     path('admin/', admin.site.urls),
 
-    path("api/",     include("api.urls")),
-    path("dashboard/", include("dashboard.urls")),
+    path("api/", include("api.urls")),
+    path("admin-panel/", include("dashboard.urls")),
 ]

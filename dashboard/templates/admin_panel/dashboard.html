@@ -108,14 +108,14 @@
     </thead>
     <tbody>
       {% for s in recent_secrets %}
-      <tr class="{% if s.ai_flagged %}row-flagged{% elif s.status == 'blocked' %}row-blocked{% endif %}">
+      <tr class="{% if s.ai_flagged %}row-flagged{% elif s.computed_status == 'blocked' %}row-blocked{% endif %}">
         <td><span class="mono">{{ s.id|stringformat:"s"|slice:":8" }}…</span></td>
         <td><span class="badge badge-gray">{{ s.secret_type }}</span></td>
         <td style="font-size:12.5px">
           {% if s.creator_user %}{{ s.creator_user.email }}
           {% else %}<span style="color:var(--text-muted)">anon</span>{% endif %}
         </td>
-        <td>{% include "admin_panel/partials/status_badge.html" with status=s.status %}</td>
+        <td>{% include "admin_panel/partials/status_badge.html" with status=s.computed_status %}</td>
         <td>
           <div class="score-wrap">
             <div class="score-bar">

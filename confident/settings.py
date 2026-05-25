@@ -30,19 +30,14 @@ SENDGRID_API_KEY = os.getenv("SENDGRID_API_KEY")
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = ['127.0.0.1', 'localhost', '192.168.21.63', 'onetimeunlock.local']
+ALLOWED_HOSTS = ['127.0.0.1', 'localhost', '192.168.21.63', 'onetimeunlock.my.id', 'www.onetimeunlock.my.id',]
 
-CSRF_TRUSTED_ORIGINS = [
-    "http://127.0.0.1:8000",
-    "https://onetimeunlock.local",
-    "http://localhost:3000",
-    
-]
 
 # Application definition
 
 INSTALLED_APPS = [
     'corsheaders',
+    'csp',
     'api',
     'dashboard',
     'django_celery_beat',
@@ -57,6 +52,7 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     'corsheaders.middleware.CorsMiddleware',
+    'csp.middleware.CSPMiddleware',
     'whitenoise.middleware.WhiteNoiseMiddleware',   
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
@@ -172,11 +168,12 @@ SIMPLE_JWT = {
 }
  
 # ── CORS (untuk Next.js frontend) ────────────────────────────────────────────
-CORS_ALLOW_ALL_ORIGINS = False
 CORS_ALLOWED_ORIGINS = [
-    "http://localhost:3000",        # Next.js dev
-    "https://onetimeunlock.local",       # production frontend
+    "http://localhost:3000",        # Next.js dev      
+    "https://onetimeunlock.local",
+    "https://onetimeunlock.my.id",
 ]
+CORS_ALLOW_ALL_ORIGINS = False
 CORS_ALLOW_CREDENTIALS = True
 # Izinkan custom header untuk fingerprint anon user
 from corsheaders.defaults import default_headers
@@ -184,24 +181,12 @@ CORS_ALLOW_HEADERS = list(default_headers) + [
     'x-fingerprint-hash',
 ]
 
-# Security Headers
-SECURE_CONTENT_TYPE_NOSNIFF = True
-X_FRAME_OPTIONS = "DENY"
-
-# Cookie security
-SESSION_COOKIE_HTTPONLY = True
-CSRF_COOKIE_HTTPONLY = True
-SESSION_COOKIE_SECURE = False
-CSRF_COOKIE_SECURE = False
-
-# HTTPS production
-SECURE_SSL_REDIRECT = False
-
-# HSTS — aktifkan kalau HTTPS sudah stabil
-SECURE_HSTS_SECONDS = 0
-SECURE_HSTS_INCLUDE_SUBDOMAINS = False
-SECURE_HSTS_PRELOAD = False
- 
+CSRF_TRUSTED_ORIGINS = [
+    "https://onetimeunlock.my.id",
+    "https://genetics-badly-ahead-physically.trycloudflare.com",
+    "https://*.trycloudflare.com",
+    "https://onetimeunlock.local",  
+]
 # ── File Upload ───────────────────────────────────────────────────────────────
 # Maks file upload 100 MB (limit server-side — validasi per-user ada di serializer)
 DATA_UPLOAD_MAX_MEMORY_SIZE    = 104_857_600   # 100 MB
@@ -218,14 +203,36 @@ CACHES = {
     }
 }
  
+SESSION_COOKIE_SAMESITE = 'Strict'
+SESSION_COOKIE_HTTPONLY = False
+CSRF_COOKIE_SAMESITE = 'Strict'
 
+CSRF_COOKIE_HTTPONLY = True
+
+SECURE_CONTENT_TYPE_NOSNIFF = True
+X_FRAME_OPTIONS = "DENY"
+
+CONTENT_SECURITY_POLICY = {
+    "DIRECTIVES": {
+        "default-src": ("'self'",),
+        "script-src": ("'self'", "'unsafe-inline'", "'unsafe-eval'", "https://cdn.jsdelivr.net"),
+        "style-src": ("'self'", "'unsafe-inline'", "https://fonts.googleapis.com"),
+        "img-src": ("'self'", "data:", "https:"),
+        "font-src": ("'self'", "data:", "https://fonts.gstatic.com"),
+        "connect-src": ("'self'", "https:"),
+        "frame-ancestors": ("'none'",),
+        "object-src": ("'none'",),
+        "base-uri": ("'self'",),
+        "form-action": ("'self'",),
+    }
+}
 
 # Internationalization
 # https://docs.djangoproject.com/en/5.2/topics/i18n/
 
 LANGUAGE_CODE = 'en-us'
 
-TIME_ZONE = 'UTC'
+TIME_ZONE = 'Asia/Jakarta'
 
 USE_I18N = True
 

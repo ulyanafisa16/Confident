@@ -1,9 +1,9 @@
 /* admin.js — SecretVault Admin Panel */
 
 /* ── CSRF ── */
-const CSRF = () =>
-  document.cookie.split('; ').find(r => r.startsWith('csrftoken='))?.split('=')[1] || '';
-
+function CSRF() {
+  return document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || ''
+}
 /* ── SIDEBAR (mobile) ── */
 window.openSidebar = function () {
   document.getElementById('sidebar')?.classList.add('open');
@@ -81,9 +81,13 @@ async function confirmAction(url, message, successMsg, type = 'default') {
   if (!result.isConfirmed) return;
 
   try {
-    const res  = await fetch(url, {
+    const res = await fetch(url, {
       method: 'POST',
-      headers: { 'X-CSRFToken': CSRF(), 'Content-Type': 'application/json' }
+      credentials: 'same-origin',
+      headers: {
+        'X-CSRFToken': CSRF(),
+        'Content-Type': 'application/json'
+      }
     });
     const data = await res.json();
 
@@ -138,9 +142,13 @@ async function bulkAction(url, action, confirmMsg, successMsg) {
   if (!ids.length) { flash('Pilih minimal satu baris.', 'warning'); return; }
   if (!confirm(confirmMsg.replace('{n}', ids.length))) return;
   try {
-    const res  = await fetch(url, {
+    const res = await fetch(url, {
       method: 'POST',
-      headers: { 'X-CSRFToken': CSRF(), 'Content-Type': 'application/json' },
+      credentials: 'same-origin',
+      headers: {
+        'X-CSRFToken': CSRF(),
+        'Content-Type': 'application/json'
+      },
       body: JSON.stringify({ ids, action })
     });
     const data = await res.json();

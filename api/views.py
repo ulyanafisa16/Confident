@@ -98,6 +98,7 @@ class QuotaStatusView(APIView):
         from .models import AnonymousSession, RateLimitConfig
  
         config           = RateLimitConfig.get_for_anonymous()
+        reg_config       = RateLimitConfig.get_for_registered()
         ip               = get_client_ip(request)
         fingerprint_hash = request.META.get("HTTP_X_FINGERPRINT_HASH", "").strip()
  
@@ -136,6 +137,7 @@ class QuotaStatusView(APIView):
             "max_file_size_mb": config.max_file_size_mb,
             "max_recipients":   config.max_recipients,
             "max_expiry_days":  config.max_expiry_days,
+            "registered_max_file_size_mb": reg_config.max_file_size_mb,
         })
 
 class RateLimitConfigView(APIView):
@@ -299,104 +301,104 @@ def _send_reset_email(to_email: str, reset_url: str) -> bool:
  
     api_key      = os.getenv("SENDGRID_API_KEY")
     from_email   = os.getenv("DEFAULT_FROM_EMAIL", "noreply@secretdrop.io")
-    app_name     = os.getenv("APP_NAME", "SecretDrop")
+    app_name     = os.getenv("APP_NAME", "OneTimeUnlock")
  
     if not api_key:
         logger.error("[password_reset] SENDGRID_API_KEY tidak ditemukan di environment.")
         return False
  
     html_content = f"""
-<!DOCTYPE html>
-<html lang="id">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Reset Password</title>
-</head>
-<body style="margin:0;padding:0;background:#f5f5f5;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
-  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f5f5f5;padding:40px 20px;">
-    <tr>
-      <td align="center">
-        <table width="520" cellpadding="0" cellspacing="0"
-          style="background:#ffffff;border-radius:12px;overflow:hidden;
-                 box-shadow:0 2px 12px rgba(0,0,0,.08);">
- 
-          <!-- Header -->
-          <tr>
-            <td style="background:#0f172a;padding:28px 36px;">
-              <p style="margin:0;color:#ffffff;font-size:18px;font-weight:600;
-                         letter-spacing:-0.3px;">
-                🔐 {app_name}
-              </p>
-            </td>
-          </tr>
- 
-          <!-- Body -->
-          <tr>
-            <td style="padding:36px;">
-              <h1 style="margin:0 0 12px;font-size:22px;font-weight:700;
-                          color:#0f172a;letter-spacing:-0.5px;">
-                Reset password kamu
-              </h1>
-              <p style="margin:0 0 24px;font-size:15px;color:#475569;line-height:1.6;">
-                Kami menerima permintaan untuk mereset password akun kamu.
-                Klik tombol di bawah untuk membuat password baru.
-              </p>
- 
-              <!-- CTA Button -->
-              <table cellpadding="0" cellspacing="0" style="margin-bottom:24px;">
-                <tr>
-                  <td style="background:#0f172a;border-radius:8px;">
-                    <a href="{reset_url}"
-                       style="display:inline-block;padding:13px 28px;
-                              color:#ffffff;font-size:14px;font-weight:600;
-                              text-decoration:none;letter-spacing:0.1px;">
-                      Reset Password →
-                    </a>
-                  </td>
-                </tr>
-              </table>
- 
-              <!-- Warning -->
-              <div style="background:#fef9c3;border:1px solid #fde047;
-                          border-radius:8px;padding:14px 16px;margin-bottom:24px;">
-                <p style="margin:0;font-size:13px;color:#854d0e;">
-                  ⏱ Link ini hanya berlaku selama <strong>1 jam</strong>.
-                  Setelah itu kamu perlu request ulang.
+    <!DOCTYPE html>
+    <html lang="id">
+    <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Reset Password</title>
+    </head>
+    <body style="margin:0;padding:0;background:#f5f5f5;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
+    <table width="100%" cellpadding="0" cellspacing="0" style="background:#f5f5f5;padding:40px 20px;">
+        <tr>
+        <td align="center">
+            <table width="520" cellpadding="0" cellspacing="0"
+            style="background:#ffffff;border-radius:12px;overflow:hidden;
+                    box-shadow:0 2px 12px rgba(0,0,0,.08);">
+    
+            <!-- Header -->
+            <tr>
+                <td style="background:#0f172a;padding:28px 36px;">
+                <p style="margin:0;color:#ffffff;font-size:18px;font-weight:600;
+                            letter-spacing:-0.3px;">
+                    🔐 {app_name}
                 </p>
-              </div>
- 
-              <!-- URL fallback -->
-              <p style="margin:0 0 6px;font-size:13px;color:#94a3b8;">
-                Jika tombol tidak bekerja, copy link ini ke browser:
-              </p>
-              <p style="margin:0;font-size:12px;color:#64748b;
-                         word-break:break-all;
-                         background:#f8fafc;padding:10px 12px;
-                         border-radius:6px;border:1px solid #e2e8f0;">
-                {reset_url}
-              </p>
-            </td>
-          </tr>
- 
-          <!-- Footer -->
-          <tr>
-            <td style="padding:20px 36px;border-top:1px solid #f1f5f9;">
-              <p style="margin:0;font-size:12px;color:#94a3b8;line-height:1.6;">
-                Jika kamu tidak merasa request ini, abaikan email ini —
-                password kamu tidak akan berubah.<br>
-                © {app_name} · Email ini dikirim otomatis, jangan dibalas.
-              </p>
-            </td>
-          </tr>
- 
-        </table>
-      </td>
-    </tr>
-  </table>
-</body>
-</html>
-"""
+                </td>
+            </tr>
+    
+            <!-- Body -->
+            <tr>
+                <td style="padding:36px;">
+                <h1 style="margin:0 0 12px;font-size:22px;font-weight:700;
+                            color:#0f172a;letter-spacing:-0.5px;">
+                    Reset password kamu
+                </h1>
+                <p style="margin:0 0 24px;font-size:15px;color:#475569;line-height:1.6;">
+                    Kami menerima permintaan untuk mereset password akun kamu.
+                    Klik tombol di bawah untuk membuat password baru.
+                </p>
+    
+                <!-- CTA Button -->
+                <table cellpadding="0" cellspacing="0" style="margin-bottom:24px;">
+                    <tr>
+                    <td style="background:#0f172a;border-radius:8px;">
+                        <a href="{reset_url}"
+                        style="display:inline-block;padding:13px 28px;
+                                color:#ffffff;font-size:14px;font-weight:600;
+                                text-decoration:none;letter-spacing:0.1px;">
+                        Reset Password →
+                        </a>
+                    </td>
+                    </tr>
+                </table>
+    
+                <!-- Warning -->
+                <div style="background:#fef9c3;border:1px solid #fde047;
+                            border-radius:8px;padding:14px 16px;margin-bottom:24px;">
+                    <p style="margin:0;font-size:13px;color:#854d0e;">
+                    ⏱ Link ini hanya berlaku selama <strong>1 jam</strong>.
+                    Setelah itu kamu perlu request ulang.
+                    </p>
+                </div>
+    
+                <!-- URL fallback -->
+                <p style="margin:0 0 6px;font-size:13px;color:#94a3b8;">
+                    Jika tombol tidak bekerja, copy link ini ke browser:
+                </p>
+                <p style="margin:0;font-size:12px;color:#64748b;
+                            word-break:break-all;
+                            background:#f8fafc;padding:10px 12px;
+                            border-radius:6px;border:1px solid #e2e8f0;">
+                    {reset_url}
+                </p>
+                </td>
+            </tr>
+    
+            <!-- Footer -->
+            <tr>
+                <td style="padding:20px 36px;border-top:1px solid #f1f5f9;">
+                <p style="margin:0;font-size:12px;color:#94a3b8;line-height:1.6;">
+                    Jika kamu tidak merasa request ini, abaikan email ini —
+                    password kamu tidak akan berubah.<br>
+                    © {app_name} · Email ini dikirim otomatis, jangan dibalas.
+                </p>
+                </td>
+            </tr>
+    
+            </table>
+        </td>
+        </tr>
+    </table>
+    </body>
+    </html>
+    """
  
     try:
         message = Mail(
@@ -907,7 +909,7 @@ class SecretDeleteView(APIView):
                 status_code=status.HTTP_404_NOT_FOUND,
             )
 
-        if secret.status == Secret.Status.ACTIVE:
+        if secret.computed_status == Secret.Status.ACTIVE:
             return error_response(
                 message="Secret yang masih aktif tidak bisa dihapus. Revoke dulu sebelum menghapus.",
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -1505,21 +1507,23 @@ class ChangePasswordView(APIView):
         new_password = request.data.get("new_password", "")
 
         if not old_password or not new_password:
-            return error_response(message="Semua field wajib diisi.")
+            return error_response(message="All fields are required.")
 
         if len(new_password) < 8:
-            return error_response(message="Password baru minimal 8 karakter.")
+            return error_response(
+                message="New password must be at least 8 characters."
+            )
 
-        # Cek password lama
+        # Check current password
         if not request.user.check_password(old_password):
             return error_response(
-                message="Password lama tidak sesuai.",
+                message="Current password is incorrect.",
                 status_code=status.HTTP_400_BAD_REQUEST,
             )
 
         if old_password == new_password:
             return error_response(
-                message="Password baru harus berbeda dari password lama.",
+                message="New password must be different from the current password.",
                 status_code=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -1527,4 +1531,6 @@ class ChangePasswordView(APIView):
         request.user.set_password(new_password)
         request.user.save(update_fields=["password"])
 
-        return success_response(message="Password berhasil diubah. Silakan login ulang.")
+        return success_response(
+            message="Password changed successfully. Please log in again."
+        )

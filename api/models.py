@@ -4,7 +4,7 @@ from django.contrib.auth.models import AbstractBaseUser, PermissionsMixin, BaseU
 from django.db import models
 from django.utils import timezone
 from django.core.validators import FileExtensionValidator, MinValueValidator, MaxValueValidator
-
+from django.utils import timezone
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -336,6 +336,27 @@ class Secret(models.Model):
         if self.max_views == 0:
             return False
         return self.current_views >= self.max_views
+    
+    @property
+    def computed_status(self):
+        from django.utils import timezone
+
+        # PRIORITY 1: revoked / blocked dari DB
+        if self.status == self.Status.REVOKED:
+            return self.Status.REVOKED
+
+        if self.status == self.Status.BLOCKED:
+            return self.Status.BLOCKED
+
+        # PRIORITY 2: waktu habis
+        if self.expires_at and timezone.now() > self.expires_at:
+            return self.Status.EXPIRED
+
+        # PRIORITY 3: views habis
+        if self.is_exhausted:
+            return self.Status.EXPIRED
+
+        return self.Status.ACTIVE
 
     # ------------------------------------------------------------------
     # Methods
@@ -385,7 +406,7 @@ class Secret(models.Model):
         if self.is_exhausted:
             self.mark_expired()
 
-
+    
 # ---------------------------------------------------------------------------
 # 4. SECRET LINK
 # ---------------------------------------------------------------------------

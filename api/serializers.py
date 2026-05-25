@@ -293,7 +293,7 @@ class SecretCreateSerializer(serializers.Serializer):
         default=1, min_value=1, max_value=100
     )
     expires_in_hours  = serializers.FloatField(
-        required=False, allow_null=True, min_value=0.0833,
+        required=False, allow_null=True, min_value=0.0167,
         help_text="Berapa jam sampai secret expired. Null = tidak ada expiry (hanya user login)."
     )
     num_recipients    = serializers.IntegerField(
@@ -441,9 +441,9 @@ class SecretCreateSerializer(serializers.Serializer):
                         f"({max_hours} jam) untuk akun Anda."
                     )
                 })
-            if expires_in_hours < 0.0833:
+            if expires_in_hours < 0.0167:
                 raise serializers.ValidationError({
-                    "expires_in_hours": "Waktu kedaluwarsa minimal 5 menit."
+                    "expires_in_hours": "Waktu kedaluwarsa minimal 1 menit."
                 })
 
         # -- Recipient check --
@@ -565,22 +565,23 @@ class SecretCreateSerializer(serializers.Serializer):
             DomainWhitelist.objects.create(secret=secret, domain=domain)
 
         # -- Simpan AI detection log --
-        if client_risk_score > 0 or client_rules:
-            action = (
-                AIDetectionLog.ActionTaken.FLAGGED
-                if ai_flagged
-                else AIDetectionLog.ActionTaken.ALLOWED
-            )
-            AIDetectionLog.objects.create(
-                secret          = secret,
-                source          = AIDetectionLog.DetectionSource.CLIENT,
-                rules_triggered = client_rules,
-                risk_score      = client_risk_score,
-                action_taken    = action,
-                ip_address      = self._get_client_ip(request),
-                file_size_bytes = validated_data.get("file_size_bytes"),
-                secret_type     = validated_data["secret_type"],
-            )
+        action_taken = (
+            AIDetectionLog.ActionTaken.FLAGGED
+            if ai_flagged
+            else AIDetectionLog.ActionTaken.ALLOWED
+        )
+
+        AIDetectionLog.objects.create(
+            secret=secret,
+            source=AIDetectionLog.DetectionSource.CLIENT,
+            rules_triggered=client_rules,
+            risk_score=client_risk_score,
+            action_taken=action_taken,
+            reviewed_at=timezone.now() if action_taken == AIDetectionLog.ActionTaken.ALLOWED else None,
+            ip_address=self._get_client_ip(request),
+            file_size_bytes=validated_data.get("file_size_bytes"),
+            secret_type=validated_data["secret_type"],
+        )
 
         return secret, links
 
@@ -741,6 +742,7 @@ class SecretDetailSerializer(serializers.ModelSerializer):
     views_remaining = serializers.ReadOnlyField()
     is_expired      = serializers.ReadOnlyField()
     creator_email   = serializers.SerializerMethodField()
+    status          = serializers.SerializerMethodField()
 
     class Meta:
         model  = Secret
@@ -755,6 +757,20 @@ class SecretDetailSerializer(serializers.ModelSerializer):
 
     def get_creator_email(self, obj):
         return obj.creator_user.email if obj.creator_user else None
+    
+    def get_status(self, obj):
+        now = timezone.now()
+
+        if obj.status == Secret.Status.REVOKED:
+            return Secret.Status.REVOKED
+
+        if obj.expires_at and now > obj.expires_at:
+            return Secret.Status.EXPIRED
+
+        if obj.current_views >= obj.max_views:
+            return Secret.Status.EXPIRED
+
+        return Secret.Status.ACTIVE
 
 
 # ===========================================================================
@@ -825,7 +841,8 @@ class AdminSecretListSerializer(serializers.ModelSerializer):
     """
     creator_email   = serializers.SerializerMethodField()
     link_count      = serializers.SerializerMethodField()
-    status_display  = serializers.CharField(source="get_status_display", read_only=True)
+    status          = serializers.SerializerMethodField()
+    status_display  = serializers.SerializerMethodField()
 
     class Meta:
         model  = Secret
@@ -844,6 +861,35 @@ class AdminSecretListSerializer(serializers.ModelSerializer):
 
     def get_link_count(self, obj):
         return obj.links.count()
+
+    def get_status(self, obj):
+        now = timezone.now()
+
+        if obj.status == Secret.Status.REVOKED:
+            return "revoked"
+
+        if obj.status == Secret.Status.BLOCKED:
+            return "blocked"
+
+        if obj.expires_at and now > obj.expires_at:
+            return "expired"
+
+        if obj.current_views >= obj.max_views:
+            return "expired"
+
+        return "active"
+    
+    def get_status_display(self, obj):
+        status = self.get_status(obj)
+
+        labels = {
+            "active": "Aktif",
+            "expired": "Expired",
+            "revoked": "Revoked",
+            "blocked": "Blocked",
+        }
+
+        return labels.get(status, status)
 
 
 class AdminAIDetectionSerializer(serializers.ModelSerializer):

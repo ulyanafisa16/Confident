@@ -2,7 +2,7 @@
 {% block title %}AI Detection — SecretVault Admin{% endblock %}
 {% block nav_ai_logs %}active{% endblock %}
 {% block page_title %}AI Detection Logs{% endblock %}
-
+{% load tz %}
 {% block content %}
 {% if unreviewed_count > 0 %}
 <div class="alert-banner alert-info">
@@ -50,7 +50,7 @@
       <tr class="{% if log.action_taken == 'flagged' %}row-flagged{% elif log.action_taken == 'blocked' %}row-blocked{% endif %}">
         <td><input type="checkbox" class="cb-row" data-id="{{ log.id }}"></td>
         <td style="font-size:12px;color:var(--text-muted);white-space:nowrap">
-          {{ log.created_at|date:"d M H:i" }}
+          {{ log.created_at|localtime|date:"d M H:i" }}
         </td>
         <td>
           {% if log.source == 'client' %}<span class="badge badge-blue">Client</span>

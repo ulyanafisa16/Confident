@@ -33,12 +33,6 @@
       </div>
     </div>
     <div class="detail-row">
-      <div class="detail-label">Max Recipients</div>
-      <div class="detail-val" style="font-family:'DM Mono',monospace;font-weight:500">
-        {{ config.max_recipients }}
-      </div>
-    </div>
-    <div class="detail-row">
       <div class="detail-label">Max Expiry Days</div>
       <div class="detail-val" style="font-family:'DM Mono',monospace;font-weight:500">
         {% if config.max_expiry_days == 0 %}Tidak terbatas{% else %}{{ config.max_expiry_days }} hari{% endif %}
@@ -70,10 +64,6 @@
       <div class="form-group">
         <label class="form-label">Max File Size (MB)</label>
         <input type="number" name="max_file_size_mb" class="form-input" value="{{ config.max_file_size_mb }}" min="1">
-      </div>
-      <div class="form-group">
-        <label class="form-label">Max Recipients</label>
-        <input type="number" name="max_recipients" class="form-input" value="{{ config.max_recipients }}" min="1">
       </div>
       <div class="form-group">
         <label class="form-label">Max Expiry Days (0 = unlimited)</label>
